@@ -1,0 +1,16 @@
+{
+  "name": "Revonn",
+  "short_name": "Revonn",
+  "description": "AI-powered business assistant for GST billing, inventory & sales",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#B8860B",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
