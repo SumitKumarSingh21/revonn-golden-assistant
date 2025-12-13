@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   IndianRupee,
   ShoppingBag,
@@ -168,9 +169,10 @@ export default function Reports() {
               </div>
             ) : (
               invoices.slice(0, 5).map((invoice) => (
-                <div
+                <Link
                   key={invoice.id}
-                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border"
+                  to={`/invoice/${invoice.id}`}
+                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:shadow-md transition-all"
                 >
                   <div className="p-2 rounded-lg bg-secondary">
                     <FileText className="w-4 h-4 text-muted-foreground" />
@@ -182,7 +184,8 @@ export default function Reports() {
                     </p>
                   </div>
                   <p className="font-semibold text-foreground">{formatCurrency(invoice.grandTotal)}</p>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </Link>
               ))
             )}
           </div>
