@@ -8,16 +8,19 @@ import {
   TrendingUp,
   Package,
   AlertTriangle,
-  Plus,
   FileText,
-  Upload,
-  Users as UsersIcon
+  Users as UsersIcon,
+  Receipt,
+  BarChart3,
+  MessageSquare,
+  UserCog,
+  Clock
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { getDailySummary, db } from '@/lib/database';
 import { useAppStore } from '@/store/app-store';
-import type { DailySummary, InventoryItem } from '@/types';
+import type { DailySummary, InventoryItem, Invoice } from '@/types';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (amount: number) => {
@@ -33,6 +36,8 @@ export default function Dashboard() {
   const { shopSettings } = useAppStore();
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
+  const [topSellingItems, setTopSellingItems] = useState<{name: string; sold: number}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -41,12 +46,32 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [dailySummary, lowStock] = await Promise.all([
+      const [dailySummary, lowStock, invoices] = await Promise.all([
         getDailySummary(),
-        db.inventory.getLowStock()
+        db.inventory.getLowStock(),
+        db.invoices.getAll()
       ]);
       setSummary(dailySummary as any);
       setLowStockItems(lowStock);
+      
+      // Get today's invoices
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayInvoices = invoices.filter(inv => new Date(inv.createdAt) >= today);
+      setRecentInvoices(todayInvoices.slice(0, 5));
+      
+      // Calculate top selling items from today's invoices
+      const itemSales: Record<string, number> = {};
+      todayInvoices.forEach(inv => {
+        inv.items.forEach(item => {
+          itemSales[item.itemName] = (itemSales[item.itemName] || 0) + item.quantity;
+        });
+      });
+      const sorted = Object.entries(itemSales)
+        .map(([name, sold]) => ({ name, sold }))
+        .sort((a, b) => b.sold - a.sold)
+        .slice(0, 5);
+      setTopSellingItems(sorted);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
@@ -54,16 +79,19 @@ export default function Dashboard() {
     }
   };
 
-  const quickActions = [
-    { icon: Plus, label: 'New Bill', path: '/billing/new', color: 'bg-primary text-primary-foreground' },
-    { icon: Upload, label: 'Upload BOM', path: '/inventory/upload', color: 'bg-secondary text-secondary-foreground' },
-    { icon: Package, label: 'Add Stock', path: '/inventory/add', color: 'bg-secondary text-secondary-foreground' },
-    { icon: UsersIcon, label: 'Add Customer', path: '/customers/add', color: 'bg-secondary text-secondary-foreground' },
+  const mainTabs = [
+    { icon: Receipt, label: 'Bill', path: '/billing/new', color: 'bg-primary text-primary-foreground', active: true },
+    { icon: Package, label: 'Inventory', path: '/inventory', color: 'bg-secondary text-foreground', active: true },
+    { icon: BarChart3, label: 'Finance', path: '/reports', color: 'bg-secondary text-foreground', active: true },
+    { icon: UsersIcon, label: 'Customer', path: '/customers', color: 'bg-secondary text-foreground', active: true },
+    { icon: FileText, label: 'GST', path: '/gst', color: 'bg-muted text-muted-foreground', active: false, comingSoon: true },
+    { icon: MessageSquare, label: 'Marketing', path: '/marketing', color: 'bg-muted text-muted-foreground', active: false, comingSoon: true },
+    { icon: UserCog, label: 'Staff', path: '/staff', color: 'bg-secondary text-foreground', active: true },
   ];
 
   return (
     <AppLayout>
-      <div className="px-4 py-4 space-y-6">
+      <div className="px-4 py-4 space-y-5">
         {/* Greeting */}
         <div className="animate-fade-in">
           <h2 className="text-2xl font-bold text-foreground">
@@ -72,20 +100,53 @@ export default function Dashboard() {
           <p className="text-muted-foreground">{shopSettings.shopName}</p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-4 gap-3 animate-slide-up" style={{ animationDelay: '100ms' }}>
-          {quickActions.map(({ icon: Icon, label, path, color }) => (
-            <Link
-              key={path}
-              to={path}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-card hover:shadow-md transition-all duration-200"
-            >
-              <div className={cn('p-3 rounded-xl', color)}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-center text-foreground">{label}</span>
-            </Link>
-          ))}
+        {/* Main 7 Tabs */}
+        <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Quick Access
+          </h3>
+          <div className="grid grid-cols-4 gap-2">
+            {mainTabs.slice(0, 4).map(({ icon: Icon, label, path, color, active, comingSoon }) => (
+              <Link
+                key={path}
+                to={active ? path : '#'}
+                className={cn(
+                  "relative flex flex-col items-center gap-2 p-3 rounded-2xl bg-card border border-border hover:shadow-md transition-all duration-200",
+                  !active && "opacity-60 cursor-not-allowed"
+                )}
+                onClick={(e) => !active && e.preventDefault()}
+              >
+                <div className={cn('p-3 rounded-xl', color)}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-medium text-center text-foreground">{label}</span>
+                {comingSoon && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">Soon</span>
+                )}
+              </Link>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {mainTabs.slice(4).map(({ icon: Icon, label, path, color, active, comingSoon }) => (
+              <Link
+                key={path}
+                to={active ? path : '#'}
+                className={cn(
+                  "relative flex flex-col items-center gap-2 p-3 rounded-2xl bg-card border border-border hover:shadow-md transition-all duration-200",
+                  !active && "opacity-60 cursor-not-allowed"
+                )}
+                onClick={(e) => !active && e.preventDefault()}
+              >
+                <div className={cn('p-3 rounded-xl', color)}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-medium text-center text-foreground">{label}</span>
+                {comingSoon && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">Soon</span>
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
 
         {/* KPI Cards */}
@@ -146,6 +207,33 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Top Selling Items */}
+        {topSellingItems.length > 0 && (
+          <div className="animate-slide-up" style={{ animationDelay: '350ms' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                🔥 Top Selling Today
+              </h3>
+            </div>
+            <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
+              {topSellingItems.map((item, idx) => (
+                <div key={item.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                      idx === 0 ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                    )}>
+                      {idx + 1}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">{item.name}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-primary">{item.sold} sold</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Low Stock Alerts */}
         {lowStockItems.length > 0 && (
           <div className="animate-slide-up" style={{ animationDelay: '400ms' }}>
@@ -188,7 +276,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Recent Activity placeholder */}
+        {/* Recent Bills */}
         <div className="animate-slide-up" style={{ animationDelay: '500ms' }}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -199,13 +287,42 @@ export default function Dashboard() {
             </Link>
           </div>
           
-          <div className="bg-card rounded-2xl border border-border p-6 text-center">
-            <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No bills today yet</p>
-            <Link to="/billing/new" className="text-sm text-primary font-medium mt-2 inline-block">
-              Create your first bill
-            </Link>
-          </div>
+          {recentInvoices.length > 0 ? (
+            <div className="space-y-2">
+              {recentInvoices.map((invoice) => (
+                <Link
+                  key={invoice.id}
+                  to={`/invoice/${invoice.id}`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border hover:shadow-md transition-all"
+                >
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Receipt className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {invoice.customerName || 'Walk-in Customer'}
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(invoice.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      {' • '}{invoice.items.length} items
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold text-foreground">
+                    {formatCurrency(invoice.grandTotal)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border border-border p-6 text-center">
+              <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No bills today yet</p>
+              <Link to="/billing/new" className="text-sm text-primary font-medium mt-2 inline-block">
+                Create your first bill
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>
