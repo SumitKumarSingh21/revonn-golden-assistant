@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Plus, 
-  Filter, 
+  Phone,
   ChevronRight,
   Users as UsersIcon,
-  Phone,
-  Tag
+  AlertCircle
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { db } from '@/lib/database';
-import type { Customer } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (amount: number) => {
@@ -22,7 +20,17 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+  total_purchases: number;
+  total_dues: number;
+  created_at: string;
+}
+
 export default function Customers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -33,8 +41,20 @@ export default function Customers() {
 
   const loadCustomers = async () => {
     try {
-      const data = await db.customers.getAll();
-      setCustomers(data);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCustomers(data || []);
     } catch (error) {
       console.error('Error loading customers:', error);
     } finally {
@@ -44,15 +64,10 @@ export default function Customers() {
 
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    customer.phone.includes(searchQuery)
+    customer.phone?.includes(searchQuery)
   );
 
-  const tagColors: Record<string, string> = {
-    'VIP': 'bg-warning/10 text-warning',
-    'Regular': 'bg-primary/10 text-primary',
-    'New': 'bg-success/10 text-success',
-    'Wholesale': 'bg-info/10 text-info'
-  };
+  const totalDues = customers.reduce((sum, c) => sum + Number(c.total_dues || 0), 0);
 
   return (
     <AppLayout title="Customers">
@@ -79,19 +94,21 @@ export default function Customers() {
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="p-3 rounded-xl bg-card text-center">
+          <div className="p-3 rounded-xl bg-card border border-border text-center">
             <p className="text-2xl font-bold text-foreground">{customers.length}</p>
             <p className="text-xs text-muted-foreground">Total</p>
           </div>
-          <div className="p-3 rounded-xl bg-card text-center">
-            <p className="text-2xl font-bold text-warning">{customers.filter(c => c.tags.includes('VIP')).length}</p>
-            <p className="text-xs text-muted-foreground">VIP</p>
-          </div>
-          <div className="p-3 rounded-xl bg-card text-center">
-            <p className="text-2xl font-bold text-destructive">
-              {formatCurrency(customers.reduce((sum, c) => sum + c.outstandingCredit, 0))}
+          <div className="p-3 rounded-xl bg-card border border-border text-center">
+            <p className="text-2xl font-bold text-success">
+              {customers.filter(c => Number(c.total_dues) === 0).length}
             </p>
-            <p className="text-xs text-muted-foreground">Credit</p>
+            <p className="text-xs text-muted-foreground">Clear</p>
+          </div>
+          <div className="p-3 rounded-xl bg-card border border-border text-center">
+            <p className="text-xl font-bold text-destructive">
+              {formatCurrency(totalDues)}
+            </p>
+            <p className="text-xs text-muted-foreground">Total Dues</p>
           </div>
         </div>
 
@@ -136,21 +153,27 @@ export default function Customers() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-medium text-foreground truncate">{customer.name}</h3>
-                    {customer.tags.map(tag => (
-                      <span key={tag} className={cn('px-2 py-0.5 text-[10px] font-medium rounded-full', tagColors[tag])}>
-                        {tag}
+                    {Number(customer.total_dues) > 0 && (
+                      <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-destructive/10 text-destructive flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Due
                       </span>
-                    ))}
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <Phone className="w-3 h-3" />
-                    {customer.phone}
+                    {customer.phone || 'No phone'}
                   </p>
-                  {customer.outstandingCredit > 0 && (
-                    <p className="text-xs text-destructive font-medium">
-                      Credit: {formatCurrency(customer.outstandingCredit)}
-                    </p>
-                  )}
+                  <div className="flex gap-3 mt-1 text-xs">
+                    <span className="text-muted-foreground">
+                      Purchases: {formatCurrency(Number(customer.total_purchases) || 0)}
+                    </span>
+                    {Number(customer.total_dues) > 0 && (
+                      <span className="text-destructive font-medium">
+                        Dues: {formatCurrency(Number(customer.total_dues))}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />

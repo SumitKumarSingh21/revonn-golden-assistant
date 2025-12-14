@@ -7,15 +7,18 @@ import {
   Search,
   User,
   Percent,
-  IndianRupee,
   Trash2,
+  CreditCard,
+  Banknote,
+  Smartphone,
+  Clock,
+  Download,
   Share2,
-  FileText
+  Check
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { db } from '@/lib/database';
+import { supabase } from '@/integrations/supabase/client';
 import { useAppStore } from '@/store/app-store';
-import type { InventoryItem, Customer, Invoice, InvoiceItem, TaxBreakup } from '@/types';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import jsPDF from 'jspdf';
@@ -29,9 +32,48 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-interface BillItem extends InvoiceItem {
-  inventoryItem?: InventoryItem;
+interface BillItem {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  total: number;
+  size?: string;
+  color?: string;
 }
+
+interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  gst_rate: number;
+  size?: string;
+  color?: string;
+}
+
+type PaymentMode = 'cash' | 'card' | 'online' | 'due';
+
+const paymentModes: { value: PaymentMode; label: string; icon: React.ElementType }[] = [
+  { value: 'cash', label: 'Cash', icon: Banknote },
+  { value: 'card', label: 'Card', icon: CreditCard },
+  { value: 'online', label: 'Online', icon: Smartphone },
+  { value: 'due', label: 'Due', icon: Clock }
+];
+
+const invoiceTemplates = [
+  { id: 'a4', label: 'A4 Standard' },
+  { id: 'thermal', label: 'Thermal 80mm' },
+  { id: 'compact', label: 'Compact A5' }
+];
 
 export default function Billing() {
   const navigate = useNavigate();
@@ -40,12 +82,17 @@ export default function Billing() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [billItems, setBillItems] = useState<BillItem[]>([]);
   const [discountType, setDiscountType] = useState<'flat' | 'percent'>('percent');
   const [discountValue, setDiscountValue] = useState(0);
-  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
+  const [amountPaid, setAmountPaid] = useState(0);
   const [showItemSearch, setShowItemSearch] = useState(false);
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('a4');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -53,19 +100,27 @@ export default function Billing() {
   }, []);
 
   const loadData = async () => {
-    const [inv, cust] = await Promise.all([
-      db.inventory.getAll(),
-      db.customers.getAll()
-    ]);
-    setInventory(inv);
-    setCustomers(cust);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+
+      const [invRes, custRes] = await Promise.all([
+        supabase.from('inventory').select('*').eq('user_id', session.user.id),
+        supabase.from('customers').select('id, name, phone').eq('user_id', session.user.id)
+      ]);
+
+      if (invRes.data) setInventory(invRes.data);
+      if (custRes.data) setCustomers(custRes.data);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
   };
 
-  const addItem = (item: InventoryItem, variantIndex: number = 0) => {
-    const variant = item.variants[variantIndex];
-    const existingIndex = billItems.findIndex(
-      bi => bi.itemId === item.id && bi.variantId === variant.id
-    );
+  const addItem = (item: InventoryItem) => {
+    const existingIndex = billItems.findIndex(bi => bi.itemId === item.id);
 
     if (existingIndex >= 0) {
       updateQuantity(existingIndex, billItems[existingIndex].quantity + 1);
@@ -74,14 +129,12 @@ export default function Billing() {
         id: uuidv4(),
         itemId: item.id,
         itemName: item.name,
-        variantId: variant.id,
-        size: variant.size,
-        color: variant.color,
         quantity: 1,
-        unitPrice: item.sellingPrice,
-        taxRate: item.taxRate,
-        total: item.sellingPrice,
-        inventoryItem: item
+        unitPrice: Number(item.price),
+        taxRate: Number(item.gst_rate) || 18,
+        total: Number(item.price),
+        size: item.size,
+        color: item.color
       };
       setBillItems([...billItems, newItem]);
     }
@@ -105,6 +158,13 @@ export default function Billing() {
     setBillItems(prev => prev.filter((_, i) => i !== index));
   };
 
+  const selectCustomer = (customer: Customer) => {
+    setSelectedCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone || '');
+    setShowCustomerSearch(false);
+  };
+
   // Calculate totals
   const subtotal = billItems.reduce((sum, item) => sum + item.total, 0);
   const discountAmount = discountType === 'percent' 
@@ -112,91 +172,134 @@ export default function Billing() {
     : discountValue;
   const afterDiscount = subtotal - discountAmount;
   
-  // Calculate tax breakup (assuming same state = CGST+SGST)
-  const taxBreakup: TaxBreakup = billItems.reduce((acc, item) => {
+  // Calculate tax
+  const taxAmount = billItems.reduce((acc, item) => {
     const taxableAmount = (item.total / (1 + item.taxRate / 100));
-    const taxAmount = item.total - taxableAmount;
-    // Assuming same state for now
-    acc.cgst += taxAmount / 2;
-    acc.sgst += taxAmount / 2;
-    return acc;
-  }, { cgst: 0, sgst: 0, igst: 0 });
+    return acc + (item.total - taxableAmount);
+  }, 0);
 
-  const totalTax = taxBreakup.cgst + taxBreakup.sgst + taxBreakup.igst;
   const grandTotal = afterDiscount;
+  const dueAmount = paymentMode === 'due' ? grandTotal : Math.max(0, grandTotal - amountPaid);
 
-  const generatePDF = (invoice: Invoice): Blob => {
-    const doc = new jsPDF();
+  // Update amount paid when payment mode changes
+  useEffect(() => {
+    if (paymentMode !== 'due') {
+      setAmountPaid(grandTotal);
+    } else {
+      setAmountPaid(0);
+    }
+  }, [paymentMode, grandTotal]);
+
+  const generatePDF = (invoiceNumber: string): Blob => {
+    const doc = new jsPDF(selectedTemplate === 'thermal' ? { unit: 'mm', format: [80, 200] } : undefined);
+    const isA4 = selectedTemplate === 'a4';
+    const isThermal = selectedTemplate === 'thermal';
+    
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const centerX = pageWidth / 2;
     
     // Header
-    doc.setFontSize(18);
-    doc.text(shopSettings.shopName, 105, 20, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(shopSettings.address, 105, 28, { align: 'center' });
-    doc.text(`GSTIN: ${shopSettings.gstin}`, 105, 34, { align: 'center' });
+    doc.setFontSize(isThermal ? 12 : 20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(shopSettings.shopName || 'Revonn Store', centerX, isThermal ? 10 : 25, { align: 'center' });
+    
+    doc.setFontSize(isThermal ? 8 : 10);
+    doc.setFont('helvetica', 'normal');
+    if (shopSettings.address) {
+      doc.text(shopSettings.address, centerX, isThermal ? 14 : 32, { align: 'center' });
+    }
+    if (shopSettings.gstin) {
+      doc.text(`GSTIN: ${shopSettings.gstin}`, centerX, isThermal ? 18 : 38, { align: 'center' });
+    }
+    
+    // Invoice title
+    doc.setFontSize(isThermal ? 10 : 14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TAX INVOICE', centerX, isThermal ? 24 : 50, { align: 'center' });
     
     // Invoice details
-    doc.setFontSize(14);
-    doc.text('TAX INVOICE', 105, 48, { align: 'center' });
+    doc.setFontSize(isThermal ? 7 : 10);
+    doc.setFont('helvetica', 'normal');
+    let y = isThermal ? 30 : 60;
+    doc.text(`Invoice: ${invoiceNumber}`, isThermal ? 5 : 20, y);
+    doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, isThermal ? 45 : 140, y);
     
-    doc.setFontSize(10);
-    doc.text(`Invoice No: ${invoice.invoiceNumber}`, 20, 60);
-    doc.text(`Date: ${new Date(invoice.createdAt).toLocaleDateString('en-IN')}`, 150, 60);
-    
-    if (invoice.customerName) {
-      doc.text(`Customer: ${invoice.customerName}`, 20, 68);
-      if (invoice.customerPhone) {
-        doc.text(`Phone: ${invoice.customerPhone}`, 20, 74);
+    if (customerName) {
+      y += isThermal ? 4 : 6;
+      doc.text(`Customer: ${customerName}`, isThermal ? 5 : 20, y);
+      if (customerPhone) {
+        doc.text(`Phone: ${customerPhone}`, isThermal ? 45 : 140, y);
       }
     }
     
-    // Items table header
-    let y = 85;
+    // Items header
+    y += isThermal ? 6 : 12;
     doc.setFillColor(200, 200, 200);
-    doc.rect(20, y, 170, 8, 'F');
-    doc.text('Item', 22, y + 6);
-    doc.text('Qty', 100, y + 6);
-    doc.text('Rate', 120, y + 6);
-    doc.text('Amount', 155, y + 6);
+    doc.rect(isThermal ? 3 : 20, y, isThermal ? 74 : 170, isThermal ? 5 : 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('Item', isThermal ? 5 : 22, y + (isThermal ? 3.5 : 6));
+    doc.text('Qty', isThermal ? 45 : 120, y + (isThermal ? 3.5 : 6));
+    doc.text('Amt', isThermal ? 60 : 165, y + (isThermal ? 3.5 : 6));
     
     // Items
-    y += 12;
-    invoice.items.forEach((item) => {
-      doc.text(item.itemName.substring(0, 40), 22, y);
-      doc.text(item.quantity.toString(), 100, y);
-      doc.text(formatCurrency(item.unitPrice), 120, y);
-      doc.text(formatCurrency(item.total), 155, y);
-      y += 8;
+    y += isThermal ? 6 : 12;
+    doc.setFont('helvetica', 'normal');
+    billItems.forEach((item) => {
+      const itemName = item.itemName.length > (isThermal ? 18 : 40) 
+        ? item.itemName.substring(0, isThermal ? 18 : 40) + '...'
+        : item.itemName;
+      doc.text(itemName, isThermal ? 5 : 22, y);
+      doc.text(item.quantity.toString(), isThermal ? 47 : 122, y);
+      doc.text(formatCurrency(item.total).replace('₹', ''), isThermal ? 55 : 155, y);
+      y += isThermal ? 4 : 7;
     });
     
-    // Totals
-    y += 5;
-    doc.line(20, y, 190, y);
-    y += 8;
-    doc.text(`Subtotal:`, 120, y);
-    doc.text(formatCurrency(invoice.subtotal), 155, y);
+    // Line
+    y += 2;
+    doc.line(isThermal ? 3 : 20, y, isThermal ? 77 : 190, y);
     
-    if (invoice.discountAmount > 0) {
-      y += 6;
-      doc.text(`Discount:`, 120, y);
-      doc.text(`-${formatCurrency(invoice.discountAmount)}`, 155, y);
+    // Totals
+    y += isThermal ? 4 : 8;
+    const totalsX = isThermal ? 30 : 120;
+    const amountX = isThermal ? 55 : 165;
+    
+    doc.text('Subtotal:', totalsX, y);
+    doc.text(formatCurrency(subtotal).replace('₹', ''), amountX, y);
+    
+    if (discountAmount > 0) {
+      y += isThermal ? 4 : 6;
+      doc.text('Discount:', totalsX, y);
+      doc.text(`-${formatCurrency(discountAmount).replace('₹', '')}`, amountX, y);
     }
     
-    y += 6;
-    doc.text(`CGST:`, 120, y);
-    doc.text(formatCurrency(invoice.taxBreakup.cgst), 155, y);
-    y += 6;
-    doc.text(`SGST:`, 120, y);
-    doc.text(formatCurrency(invoice.taxBreakup.sgst), 155, y);
+    y += isThermal ? 4 : 6;
+    doc.text('Tax:', totalsX, y);
+    doc.text(formatCurrency(taxAmount).replace('₹', ''), amountX, y);
     
-    y += 8;
-    doc.setFontSize(12);
-    doc.text(`Grand Total:`, 120, y);
-    doc.text(formatCurrency(invoice.grandTotal), 155, y);
+    y += isThermal ? 5 : 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(isThermal ? 9 : 12);
+    doc.text('TOTAL:', totalsX, y);
+    doc.text(formatCurrency(grandTotal), amountX - 5, y);
+    
+    // Payment info
+    y += isThermal ? 5 : 10;
+    doc.setFontSize(isThermal ? 7 : 9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Payment: ${paymentMode.toUpperCase()}`, isThermal ? 5 : 20, y);
+    if (dueAmount > 0) {
+      doc.text(`Due: ${formatCurrency(dueAmount)}`, isThermal ? 45 : 140, y);
+    }
     
     // Footer
-    doc.setFontSize(9);
-    doc.text('Thank you for your business!', 105, 280, { align: 'center' });
+    y = isThermal ? 180 : 270;
+    doc.setFontSize(isThermal ? 7 : 9);
+    doc.text('Thank you for your business!', centerX, y, { align: 'center' });
+    
+    y += isThermal ? 4 : 6;
+    doc.setFontSize(isThermal ? 6 : 8);
+    doc.setTextColor(150);
+    doc.text('Powered by Revonn', centerX, y, { align: 'center' });
     
     return doc.output('blob');
   };
@@ -210,65 +313,131 @@ export default function Billing() {
     setIsSaving(true);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Please login to create bills');
+        navigate('/auth');
+        return;
+      }
+
       // Generate invoice number
-      const allInvoices = await db.invoices.getAll();
-      const invoiceNumber = `${shopSettings.invoicePrefix}-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${(allInvoices.length + 1).toString().padStart(4, '0')}`;
+      const { count } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.user.id);
+      
+      const invoiceNumber = `${shopSettings.invoicePrefix || 'INV'}-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${((count || 0) + 1).toString().padStart(4, '0')}`;
 
-      const invoice: Invoice = {
-        id: uuidv4(),
-        invoiceNumber,
-        customerId: selectedCustomer?.id,
-        customerName: selectedCustomer?.name,
-        customerPhone: selectedCustomer?.phone,
-        items: billItems.map(({ inventoryItem, ...item }) => item),
-        subtotal,
-        discountAmount,
-        discountType,
-        discountValue,
-        taxBreakup,
-        totalTax,
-        grandTotal,
-        paymentMethod: 'cash',
-        paidAmount: grandTotal,
-        status: 'paid',
-        createdAt: new Date(),
-        syncStatus: 'pending'
-      };
+      // Create or update customer
+      let customerId = selectedCustomerId;
+      if (!customerId && customerName) {
+        const { data: newCustomer, error: custError } = await supabase
+          .from('customers')
+          .insert({
+            user_id: session.user.id,
+            name: customerName,
+            phone: customerPhone || null,
+            total_purchases: grandTotal,
+            total_dues: dueAmount
+          })
+          .select()
+          .single();
+        
+        if (custError) throw custError;
+        customerId = newCustomer.id;
+      } else if (customerId) {
+        // Update existing customer
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('total_purchases, total_dues')
+          .eq('id', customerId)
+          .single();
+        
+        if (existingCustomer) {
+          await supabase
+            .from('customers')
+            .update({
+              total_purchases: Number(existingCustomer.total_purchases) + grandTotal,
+              total_dues: Number(existingCustomer.total_dues) + dueAmount
+            })
+            .eq('id', customerId);
+        }
+      }
 
-      // Save invoice
-      await db.invoices.add(invoice);
+      // Create invoice
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .insert([{
+          user_id: session.user.id,
+          customer_id: customerId,
+          invoice_number: invoiceNumber,
+          customer_name: customerName || 'Walk-in Customer',
+          customer_phone: customerPhone || null,
+          items: billItems,
+          subtotal,
+          tax_amount: taxAmount,
+          discount: discountAmount,
+          total: grandTotal,
+          payment_mode: paymentMode,
+          amount_paid: amountPaid,
+          due_amount: dueAmount,
+          status: dueAmount > 0 ? 'partial' : 'completed'
+        }]);
 
-      // Update inventory stock
+      if (invoiceError) throw invoiceError;
+
+      // Update inventory quantities
       for (const item of billItems) {
-        if (item.inventoryItem) {
-          const updatedItem = { ...item.inventoryItem };
-          const variantIndex = updatedItem.variants.findIndex(v => v.id === item.variantId);
-          if (variantIndex >= 0) {
-            updatedItem.variants[variantIndex].stock -= item.quantity;
-          }
-          updatedItem.updatedAt = new Date();
-          await db.inventory.update(updatedItem);
+        const { data: currentItem } = await supabase
+          .from('inventory')
+          .select('quantity, sales_count')
+          .eq('id', item.itemId)
+          .single();
+        
+        if (currentItem) {
+          await supabase
+            .from('inventory')
+            .update({ 
+              quantity: Math.max(0, currentItem.quantity - item.quantity),
+              sales_count: (currentItem.sales_count || 0) + item.quantity,
+              last_sold_at: new Date().toISOString()
+            })
+            .eq('id', item.itemId);
         }
       }
 
       // Generate PDF
-      const pdfBlob = generatePDF(invoice);
+      const pdfBlob = generatePDF(invoiceNumber);
       
-      // Share if auto-WhatsApp is enabled
-      if (shopSettings.autoWhatsApp && selectedCustomer?.phone) {
+      // Offer to share
+      if (navigator.share && customerPhone) {
         try {
           await navigator.share({
             title: `Invoice ${invoiceNumber}`,
             text: `Invoice from ${shopSettings.shopName}\nTotal: ${formatCurrency(grandTotal)}`,
             files: [new File([pdfBlob], `${invoiceNumber}.pdf`, { type: 'application/pdf' })]
           });
-        } catch (shareError) {
-          // Share cancelled or not supported
+        } catch {
+          // Download instead
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${invoiceNumber}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
         }
+      } else {
+        // Just download
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${invoiceNumber}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
       }
 
       toast.success(`Invoice ${invoiceNumber} created!`);
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Error creating invoice');
@@ -278,15 +447,19 @@ export default function Billing() {
   };
 
   const filteredItems = inventory.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.phone?.includes(searchQuery)
   );
 
   return (
     <AppLayout title="New Bill" hideNav>
       <div className="flex flex-col h-[calc(100vh-64px)]">
         {/* Header */}
-        <div className="px-4 py-3 flex items-center gap-3 border-b border-border">
+        <div className="px-4 py-3 flex items-center gap-3 border-b border-border bg-card">
           <button 
             onClick={() => navigate(-1)}
             className="p-2 rounded-xl bg-secondary"
@@ -298,25 +471,37 @@ export default function Billing() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-          {/* Customer Selection */}
-          <button
-            onClick={() => setShowCustomerSearch(true)}
-            className="w-full flex items-center gap-3 p-3 rounded-xl bg-card border border-border"
-          >
-            <div className="p-2 rounded-lg bg-secondary">
-              <User className="w-4 h-4 text-muted-foreground" />
+          {/* Customer Info */}
+          <div className="p-4 rounded-xl bg-card border border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <User className="w-4 h-4" />
+                Customer Details
+              </div>
+              <button
+                onClick={() => setShowCustomerSearch(true)}
+                className="text-xs text-primary font-medium"
+              >
+                Search existing
+              </button>
             </div>
-            <div className="flex-1 text-left">
-              {selectedCustomer ? (
-                <>
-                  <p className="font-medium text-foreground">{selectedCustomer.name}</p>
-                  <p className="text-xs text-muted-foreground">{selectedCustomer.phone}</p>
-                </>
-              ) : (
-                <p className="text-muted-foreground">Select Customer (Walk-in)</p>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Customer name"
+                className="input-field text-sm"
+              />
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Phone number"
+                className="input-field text-sm"
+              />
             </div>
-          </button>
+          </div>
 
           {/* Add Items */}
           <button
@@ -338,7 +523,7 @@ export default function Billing() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{item.itemName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {item.size && `Size: ${item.size} • `}
+                      {item.size && `${item.size} • `}
                       {formatCurrency(item.unitPrice)} × {item.quantity}
                     </p>
                   </div>
@@ -384,7 +569,7 @@ export default function Billing() {
                   type="number"
                   value={discountValue}
                   onChange={(e) => setDiscountValue(Number(e.target.value))}
-                  className="w-20 px-2 py-1 rounded-lg border border-input text-right"
+                  className="w-20 px-2 py-1 rounded-lg border border-input text-right text-sm"
                   min="0"
                 />
                 <button
@@ -393,6 +578,67 @@ export default function Billing() {
                 >
                   {discountType === 'percent' ? '%' : '₹'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Mode */}
+          {billItems.length > 0 && (
+            <div className="p-4 rounded-xl bg-card border border-border space-y-3">
+              <p className="text-sm font-medium text-foreground">Payment Mode</p>
+              <div className="grid grid-cols-4 gap-2">
+                {paymentModes.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setPaymentMode(value)}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all",
+                      paymentMode === value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-secondary text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-xs font-medium">{label}</span>
+                  </button>
+                ))}
+              </div>
+              
+              {paymentMode !== 'due' && (
+                <div className="flex items-center gap-3 pt-2">
+                  <span className="text-sm text-muted-foreground">Amount Paid:</span>
+                  <input
+                    type="number"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(Number(e.target.value))}
+                    className="flex-1 px-3 py-2 rounded-lg border border-input text-right"
+                    max={grandTotal}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Invoice Template */}
+          {billItems.length > 0 && (
+            <div className="p-4 rounded-xl bg-card border border-border space-y-3">
+              <p className="text-sm font-medium text-foreground">Invoice Format</p>
+              <div className="grid grid-cols-3 gap-2">
+                {invoiceTemplates.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedTemplate(id)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 p-2 rounded-xl border text-xs font-medium transition-all",
+                      selectedTemplate === id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground"
+                    )}
+                  >
+                    {selectedTemplate === id && <Check className="w-3 h-3" />}
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -413,9 +659,15 @@ export default function Billing() {
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">CGST + SGST</span>
-                <span>{formatCurrency(totalTax)}</span>
+                <span className="text-muted-foreground">Tax (GST)</span>
+                <span>{formatCurrency(taxAmount)}</span>
               </div>
+              {dueAmount > 0 && (
+                <div className="flex justify-between text-warning">
+                  <span>Due Amount</span>
+                  <span>{formatCurrency(dueAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
                 <span>Total</span>
                 <span>{formatCurrency(grandTotal)}</span>
@@ -426,9 +678,16 @@ export default function Billing() {
           <button
             onClick={handleSave}
             disabled={billItems.length === 0 || isSaving}
-            className="w-full py-4 rounded-xl btn-gold font-semibold text-lg disabled:opacity-50"
+            className="w-full py-4 rounded-xl btn-gold font-semibold text-lg disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isSaving ? 'Saving...' : `Save & Share Invoice`}
+            {isSaving ? (
+              <>Saving...</>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                Save & Download Invoice
+              </>
+            )}
           </button>
         </div>
 
@@ -469,11 +728,10 @@ export default function Billing() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground">{item.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {item.sku && `${item.sku} • `}
-                        Stock: {item.variants.reduce((s, v) => s + v.stock, 0)}
+                        Stock: {item.quantity} • GST: {item.gst_rate}%
                       </p>
                     </div>
-                    <p className="font-semibold text-primary">{formatCurrency(item.sellingPrice)}</p>
+                    <p className="font-semibold text-primary">{formatCurrency(Number(item.price))}</p>
                   </button>
                 ))}
                 
@@ -493,44 +751,49 @@ export default function Billing() {
             <div className="p-4">
               <div className="flex items-center gap-3 mb-4">
                 <button 
-                  onClick={() => setShowCustomerSearch(false)}
+                  onClick={() => {
+                    setShowCustomerSearch(false);
+                    setSearchQuery('');
+                  }}
                   className="p-2 rounded-xl bg-secondary"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <h2 className="text-lg font-semibold">Select Customer</h2>
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search customers..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="input-field pl-10"
+                    autoFocus
+                  />
+                </div>
               </div>
               
-              <button
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setShowCustomerSearch(false);
-                }}
-                className="w-full flex items-center gap-3 p-3 bg-secondary rounded-xl mb-2"
-              >
-                <User className="w-5 h-5 text-muted-foreground" />
-                <span className="font-medium">Walk-in Customer</span>
-              </button>
-              
-              <div className="space-y-2">
-                {customers.map((customer) => (
+              <div className="space-y-2 max-h-[calc(100vh-120px)] overflow-y-auto">
+                {filteredCustomers.map((customer) => (
                   <button
                     key={customer.id}
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setShowCustomerSearch(false);
-                    }}
-                    className="w-full flex items-center gap-3 p-3 bg-card rounded-xl border border-border text-left"
+                    onClick={() => selectCustomer(customer)}
+                    className="w-full flex items-center gap-3 p-3 bg-card rounded-xl border border-border text-left hover:bg-secondary/50 transition-colors"
                   >
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="font-bold text-primary">{customer.name.charAt(0)}</span>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground">{customer.name}</p>
-                      <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                      <p className="text-sm text-muted-foreground">{customer.phone || 'No phone'}</p>
                     </div>
                   </button>
                 ))}
+                
+                {filteredCustomers.length === 0 && (
+                  <p className="text-center py-8 text-muted-foreground">
+                    No customers found
+                  </p>
+                )}
               </div>
             </div>
           </div>
