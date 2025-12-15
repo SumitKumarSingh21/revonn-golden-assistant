@@ -6,6 +6,7 @@ import { useVoiceRecognition, speakText } from '@/hooks/useVoiceRecognition';
 import { supabase } from '@/integrations/supabase/client';
 import type { AIMessage } from '@/types';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -16,13 +17,12 @@ export function AIAssistant() {
     {
       id: '1',
       role: 'assistant',
-      content: "Hi! I'm your Revonn AI Assistant. 👋\n\nMain aapki madad kar sakta hoon:\n\n• Stock check karna\n• Sales & profit reports\n• Bills banana (voice se bhi!)\n• Marketing messages\n• Customer history\n• Staff attendance\n\nBoliye ya type kijiye!",
+      content: "Hi! I'm your Revonn AI Assistant. 👋\n\nMain aapki madad kar sakta hoon:\n\n• Stock add karna (\"Add 50 keyboards\")\n• Bills banana (\"Create bill for Ramesh 2 blue kurti @ 500\")\n• Payment tracking (\"1000 paid 500 due\")\n• Sales & profit reports\n• Customer history\n\nBoliye ya type kijiye!",
       timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -40,7 +40,7 @@ export function AIAssistant() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
+  }, [messages]);
 
   useEffect(() => {
     if (isAIOpen) inputRef.current?.focus();
@@ -69,11 +69,14 @@ export function AIAssistant() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
-    setStreamingContent('');
 
     try {
-      // Call AI edge function with streaming
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Call chat-agent edge function with OpenAI function calling
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat-agent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,10 +90,7 @@ export function AIAssistant() {
             })),
             { role: 'user', content: messageText }
           ],
-          context: {
-            timestamp: new Date().toISOString(),
-            language: detectLanguage(messageText)
-          }
+          userId: user.id
         })
       });
 
@@ -99,76 +99,32 @@ export function AIAssistant() {
         throw new Error(errorData.error || 'AI service error');
       }
 
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let textBuffer = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          textBuffer += decoder.decode(value, { stream: true });
-          
-          let newlineIndex: number;
-          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-            let line = textBuffer.slice(0, newlineIndex);
-            textBuffer = textBuffer.slice(newlineIndex + 1);
-            
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            if (line.startsWith(':') || line.trim() === '') continue;
-            if (!line.startsWith('data: ')) continue;
-            
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === '[DONE]') break;
-            
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) {
-                fullContent += content;
-                setStreamingContent(fullContent);
-              }
-            } catch {
-              // Incomplete JSON, wait for more data
-            }
-          }
-        }
-      }
-
-      // Add final message
-      const finalContent = fullContent || 'I apologize, I could not generate a response.';
+      const data = await response.json();
       
+      // Add AI response
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: finalContent,
+        content: data.message,
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      setStreamingContent('');
+      
+      // Show toast for successful actions
+      if (data.action && data.result?.success) {
+        if (data.action === 'addToInventory') {
+          toast.success(`Added ${data.result.added} ${data.result.product_name} to inventory`);
+        } else if (data.action === 'generateInvoice') {
+          toast.success(`Invoice ${data.result.invoice_number} created! Total: ₹${data.result.total}`);
+          // Navigate to billing after invoice creation
+          setTimeout(() => { setIsAIOpen(false); navigate('/billing'); }, 2000);
+        }
+      }
       
       // Speak response
       const lang = detectLanguage(messageText);
-      speakText(finalContent.replace(/[*#\[\]{}]/g, '').slice(0, 500), lang === 'hindi' ? 'hi-IN' : 'en-IN');
-
-      // Check for actions in response
-      try {
-        const actionMatch = finalContent.match(/\{"action":\s*"([^"]+)"[^}]*\}/);
-        if (actionMatch) {
-          const actionData = JSON.parse(actionMatch[0]);
-          if (actionData.action === 'create_bill') {
-            setTimeout(() => { setIsAIOpen(false); navigate('/billing'); }, 1500);
-          } else if (actionData.action === 'navigate' && actionData.path) {
-            setTimeout(() => { setIsAIOpen(false); navigate(actionData.path); }, 1500);
-          }
-        }
-      } catch {
-        // No action found, continue
-      }
+      speakText(data.message.replace(/[*#\[\]{}]/g, '').slice(0, 500), lang === 'hindi' ? 'hi-IN' : 'en-IN');
 
     } catch (error) {
       console.error('AI error:', error);
@@ -181,7 +137,6 @@ export function AIAssistant() {
           : "Sorry, I encountered an error. Please try again.",
         timestamp: new Date()
       }]);
-      setStreamingContent('');
     } finally {
       setIsLoading(false);
     }
@@ -231,16 +186,7 @@ export function AIAssistant() {
             </div>
           ))}
           
-          {/* Streaming content */}
-          {streamingContent && (
-            <div className="flex justify-start">
-              <div className="ai-bubble animate-scale-in max-w-[85%]">
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">{streamingContent}</p>
-              </div>
-            </div>
-          )}
-          
-          {isLoading && !streamingContent && (
+          {isLoading && (
             <div className="flex justify-start">
               <div className="ai-bubble flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
