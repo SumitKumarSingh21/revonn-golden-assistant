@@ -373,7 +373,7 @@ export default function Billing() {
           invoice_number: invoiceNumber,
           customer_name: customerName || 'Walk-in Customer',
           customer_phone: customerPhone || null,
-          items: billItems,
+          items: billItems as unknown as import('@/integrations/supabase/types').Json,
           subtotal,
           tax_amount: taxAmount,
           discount: discountAmount,
