@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import revonnLogo from '@/assets/revonn-logo.jpeg';
 
-export default function Splash() {
-  const navigate = useNavigate();
+interface SplashProps {
+  onComplete: (isAuthenticated: boolean) => void;
+}
+
+export default function Splash({ onComplete }: SplashProps) {
   const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
-    // Show splash for 2 seconds
+    // Show splash for 3 seconds
     const timer = setTimeout(async () => {
       setIsAnimating(false);
       
@@ -16,16 +18,12 @@ export default function Splash() {
       const { data: { session } } = await supabase.auth.getSession();
       
       setTimeout(() => {
-        if (session) {
-          navigate('/dashboard');
-        } else {
-          navigate('/auth');
-        }
+        onComplete(!!session);
       }, 300);
-    }, 2000);
+    }, 3000);
 
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [onComplete]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center">

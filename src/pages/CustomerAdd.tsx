@@ -5,18 +5,13 @@ import {
   User, 
   Phone, 
   Mail, 
-  MapPin, 
-  Tag,
-  Save
+  MapPin,
+  Save,
+  Loader2
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { db } from '@/lib/database';
-import type { Customer, CustomerTag } from '@/types';
-import { cn } from '@/lib/utils';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-const availableTags: CustomerTag[] = ['Regular', 'VIP', 'New', 'Wholesale'];
 
 export default function CustomerAdd() {
   const navigate = useNavigate();
@@ -25,22 +20,11 @@ export default function CustomerAdd() {
     name: '',
     phone: '',
     email: '',
-    address: '',
-    tags: ['New'] as CustomerTag[],
-    outstandingCredit: 0
+    address: ''
   });
 
-  const handleChange = (field: string, value: string | number) => {
+  const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const toggleTag = (tag: CustomerTag) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter(t => t !== tag)
-        : [...prev.tags, tag]
-    }));
   };
 
   const handleSubmit = async () => {
@@ -56,23 +40,32 @@ export default function CustomerAdd() {
     setIsSubmitting(true);
 
     try {
-      const customer: Customer = {
-        id: uuidv4(),
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim() || undefined,
-        address: formData.address.trim() || undefined,
-        tags: formData.tags,
-        outstandingCredit: formData.outstandingCredit,
-        createdAt: new Date()
-      };
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Please login first');
+        navigate('/auth');
+        return;
+      }
 
-      await db.customers.add(customer);
+      const { error } = await supabase
+        .from('customers')
+        .insert({
+          user_id: session.user.id,
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim() || null,
+          address: formData.address.trim() || null,
+          total_purchases: 0,
+          total_dues: 0
+        });
+
+      if (error) throw error;
+
       toast.success('Customer added successfully!');
       navigate('/customers');
     } catch (error) {
       console.error('Error adding customer:', error);
-      toast.error('Error adding customer');
+      toast.error('Error adding customer. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -121,9 +114,10 @@ export default function CustomerAdd() {
               <input
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
-                placeholder="Enter phone number"
+                onChange={(e) => handleChange('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Enter 10-digit phone number"
                 className="input-field pl-11"
+                maxLength={10}
               />
             </div>
           </div>
@@ -161,45 +155,6 @@ export default function CustomerAdd() {
               />
             </div>
           </div>
-
-          {/* Tags */}
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Customer Tags
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {availableTags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  className={cn(
-                    'px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2',
-                    formData.tags.includes(tag)
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-secondary-foreground'
-                  )}
-                >
-                  <Tag className="w-4 h-4" />
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Outstanding Credit */}
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-              Outstanding Credit (₹)
-            </label>
-            <input
-              type="number"
-              value={formData.outstandingCredit}
-              onChange={(e) => handleChange('outstandingCredit', Number(e.target.value))}
-              placeholder="0"
-              min="0"
-              className="input-field"
-            />
-          </div>
         </div>
 
         {/* Submit Button */}
@@ -208,8 +163,17 @@ export default function CustomerAdd() {
           disabled={isSubmitting}
           className="w-full py-4 rounded-xl btn-gold font-semibold text-lg disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          <Save className="w-5 h-5" />
-          {isSubmitting ? 'Saving...' : 'Save Customer'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              Save Customer
+            </>
+          )}
         </button>
       </div>
     </AppLayout>

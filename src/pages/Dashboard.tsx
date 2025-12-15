@@ -18,9 +18,8 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { KPICard } from '@/components/dashboard/KPICard';
-import { getDailySummary, db } from '@/lib/database';
+import { supabase } from '@/integrations/supabase/client';
 import { useAppStore } from '@/store/app-store';
-import type { DailySummary, InventoryItem, Invoice } from '@/types';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (amount: number) => {
@@ -32,52 +31,78 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  customer_name: string | null;
+  total: number;
+  items: any;
+  created_at: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  quantity: number;
+  sales_count: number;
+}
+
 export default function Dashboard() {
-  const { shopSettings } = useAppStore();
-  const [summary, setSummary] = useState<DailySummary | null>(null);
-  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
-  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [topSellingItems, setTopSellingItems] = useState<{name: string; sold: number}[]>([]);
+  const { shopSettings, loadUserSettings } = useAppStore();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    loadUserSettings();
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
     try {
-      const [dailySummary, lowStock, invoices] = await Promise.all([
-        getDailySummary(),
-        db.inventory.getLowStock(),
-        db.invoices.getAll()
-      ]);
-      setSummary(dailySummary as any);
-      setLowStockItems(lowStock);
-      
-      // Get today's invoices
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Get today's start
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayInvoices = invoices.filter(inv => new Date(inv.createdAt) >= today);
-      setRecentInvoices(todayInvoices.slice(0, 5));
-      
-      // Calculate top selling items from today's invoices
-      const itemSales: Record<string, number> = {};
-      todayInvoices.forEach(inv => {
-        inv.items.forEach(item => {
-          itemSales[item.itemName] = (itemSales[item.itemName] || 0) + item.quantity;
-        });
-      });
-      const sorted = Object.entries(itemSales)
-        .map(([name, sold]) => ({ name, sold }))
-        .sort((a, b) => b.sold - a.sold)
-        .slice(0, 5);
-      setTopSellingItems(sorted);
+
+      // Load invoices
+      const { data: invoicesData } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .gte('created_at', today.toISOString())
+        .order('created_at', { ascending: false });
+
+      setInvoices(invoicesData || []);
+
+      // Load inventory for low stock
+      const { data: inventoryData } = await supabase
+        .from('inventory')
+        .select('*')
+        .eq('user_id', session.user.id);
+
+      setInventory(inventoryData || []);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Calculate stats
+  const totalSales = invoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+  const totalItemsSold = invoices.reduce((sum, inv) => {
+    const items = Array.isArray(inv.items) ? inv.items : [];
+    return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
+  }, 0);
+  const taxCollected = invoices.reduce((sum, inv) => sum + Number((inv as any).tax_amount || 0), 0);
+  const lowStockItems = inventory.filter(item => Number(item.quantity) <= 5);
+  const topSellingItems = inventory
+    .filter(item => Number(item.sales_count) > 0)
+    .sort((a, b) => Number(b.sales_count) - Number(a.sales_count))
+    .slice(0, 5);
 
   const mainTabs = [
     { icon: Receipt, label: 'Bill', path: '/billing/new', color: 'bg-primary text-primary-foreground', active: true },
@@ -158,7 +183,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3 animate-slide-up" style={{ animationDelay: '200ms' }}>
             <KPICard
               title="Total Sales"
-              value={formatCurrency(summary?.totalSales || 0)}
+              value={formatCurrency(totalSales)}
               icon={<IndianRupee className="w-5 h-5" />}
               trend="up"
               trendValue="+12%"
@@ -166,20 +191,20 @@ export default function Dashboard() {
             />
             <KPICard
               title="Items Sold"
-              value={summary?.totalItemsSold || 0}
-              subtitle={`${summary?.invoiceCount || 0} invoices`}
+              value={totalItemsSold}
+              subtitle={`${invoices.length} invoices`}
               icon={<ShoppingBag className="w-5 h-5" />}
               variant="success"
             />
             <KPICard
               title="Cash In"
-              value={formatCurrency(summary?.totalCashIn || 0)}
+              value={formatCurrency(totalSales)}
               icon={<ArrowDownCircle className="w-5 h-5" />}
               variant="success"
             />
             <KPICard
-              title="Cash Out"
-              value={formatCurrency(summary?.totalCashOut || 0)}
+              title="Tax Collected"
+              value={formatCurrency(taxCollected)}
               icon={<ArrowUpCircle className="w-5 h-5" />}
               variant="warning"
             />
@@ -192,12 +217,12 @@ export default function Dashboard() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">Today's Profit</p>
+                <p className="text-sm opacity-90">Today's Revenue</p>
                 <h3 className="text-3xl font-bold mt-1">
-                  {formatCurrency(summary?.grossProfit || 0)}
+                  {formatCurrency(totalSales)}
                 </h3>
                 <p className="text-xs opacity-80 mt-1">
-                  Tax Collected: {formatCurrency(summary?.taxCollected || 0)}
+                  Tax Collected: {formatCurrency(taxCollected)}
                 </p>
               </div>
               <div className="p-3 bg-white/20 rounded-xl">
@@ -212,12 +237,12 @@ export default function Dashboard() {
           <div className="animate-slide-up" style={{ animationDelay: '350ms' }}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                🔥 Top Selling Today
+                🔥 Top Selling Items
               </h3>
             </div>
             <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
               {topSellingItems.map((item, idx) => (
-                <div key={item.name} className="flex items-center justify-between">
+                <div key={item.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className={cn(
                       "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
@@ -227,7 +252,7 @@ export default function Dashboard() {
                     </span>
                     <span className="text-sm font-medium text-foreground">{item.name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-primary">{item.sold} sold</span>
+                  <span className="text-sm font-semibold text-primary">{item.sales_count} sold</span>
                 </div>
               ))}
             </div>
@@ -247,31 +272,28 @@ export default function Dashboard() {
             </div>
             
             <div className="space-y-2">
-              {lowStockItems.slice(0, 3).map((item) => {
-                const totalStock = item.variants.reduce((sum, v) => sum + v.stock, 0);
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-destructive/5 border border-destructive/20"
-                  >
-                    <div className="p-2 rounded-lg bg-destructive/10">
-                      <AlertTriangle className="w-4 h-4 text-destructive" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Only {totalStock} left • Threshold: {item.lowStockThreshold}
-                      </p>
-                    </div>
-                    <Link
-                      to={`/inventory/${item.id}`}
-                      className="text-xs font-medium text-primary"
-                    >
-                      Restock
-                    </Link>
+              {lowStockItems.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-destructive/5 border border-destructive/20"
+                >
+                  <div className="p-2 rounded-lg bg-destructive/10">
+                    <AlertTriangle className="w-4 h-4 text-destructive" />
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Only {item.quantity} left
+                    </p>
+                  </div>
+                  <Link
+                    to={`/inventory`}
+                    className="text-xs font-medium text-primary"
+                  >
+                    Restock
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -287,32 +309,35 @@ export default function Dashboard() {
             </Link>
           </div>
           
-          {recentInvoices.length > 0 ? (
+          {invoices.length > 0 ? (
             <div className="space-y-2">
-              {recentInvoices.map((invoice) => (
-                <Link
-                  key={invoice.id}
-                  to={`/invoice/${invoice.id}`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border hover:shadow-md transition-all"
-                >
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Receipt className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {invoice.customerName || 'Walk-in Customer'}
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {new Date(invoice.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      {' • '}{invoice.items.length} items
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold text-foreground">
-                    {formatCurrency(invoice.grandTotal)}
-                  </span>
-                </Link>
-              ))}
+              {invoices.slice(0, 5).map((invoice) => {
+                const items = Array.isArray(invoice.items) ? invoice.items : [];
+                return (
+                  <Link
+                    key={invoice.id}
+                    to={`/invoices/${invoice.id}`}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border hover:shadow-md transition-all"
+                  >
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Receipt className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {invoice.customer_name || 'Walk-in Customer'}
+                      </p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(invoice.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        {' • '}{items.length} items
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold text-foreground">
+                      {formatCurrency(Number(invoice.total))}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           ) : (
             <div className="bg-card rounded-2xl border border-border p-6 text-center">

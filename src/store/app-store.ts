@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { User, InventoryItem, Customer, Invoice, DailySummary } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AppState {
   // User state
@@ -41,9 +42,10 @@ interface AppState {
     autoWhatsApp: boolean;
   };
   setShopSettings: (settings: Partial<AppState['shopSettings']>) => void;
+  loadUserSettings: () => Promise<void>;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   currentUser: null,
   setCurrentUser: (user) => set({ currentUser: user }),
   
@@ -66,15 +68,44 @@ export const useAppStore = create<AppState>((set) => ({
   setIsAIOpen: (open) => set({ isAIOpen: open }),
   
   shopSettings: {
-    shopName: 'Revonn Demo Store',
-    gstin: '27AABCU9603R1ZX',
-    address: 'Mumbai, Maharashtra',
-    state: 'Maharashtra',
-    phone: '+919876543210',
+    shopName: 'My Shop',
+    gstin: '',
+    address: '',
+    state: '',
+    phone: '',
     invoicePrefix: 'INV',
     autoWhatsApp: false
   },
   setShopSettings: (settings) => set((state) => ({
     shopSettings: { ...state.shopSettings, ...settings }
-  }))
+  })),
+  
+  loadUserSettings: async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Get user metadata from auth
+      const userMeta = session.user.user_metadata;
+      
+      // Try to get profile from profiles table
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      set((state) => ({
+        shopSettings: {
+          ...state.shopSettings,
+          shopName: profile?.shop_name || userMeta?.shop_name || 'My Shop',
+          gstin: profile?.gstin || userMeta?.gstin || '',
+          address: profile?.address || '',
+          phone: profile?.phone || userMeta?.phone || '',
+        }
+      }));
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+    }
+  }
 }));
