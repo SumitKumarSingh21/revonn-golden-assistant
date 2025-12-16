@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,8 +15,8 @@ serve(async (req) => {
   try {
     const { image, text, mimeType = "image/jpeg" } = await req.json();
 
-    if (!geminiApiKey) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     if (!image && !text) {
@@ -48,73 +48,62 @@ RULES:
 5. Ignore headers, footers, company names, dates, invoice numbers
 6. Handle messy handwriting - extract what you can read
 7. For Hindi text, translate item names to English
-8. Return ONLY valid JSON, no explanations
+8. Return ONLY valid JSON, no explanations`;
 
-EXAMPLES:
-- "Sugar 2kg @50" → {"name": "Sugar", "quantity": 2, "price": 50}
-- "चावल 5 किलो" → {"name": "Rice", "quantity": 5, "price": 0}
-- "Blue Shirt M x3" → {"name": "Shirt", "quantity": 3, "price": 0, "size": "M", "color": "Blue"}`;
-
-    let requestBody: any;
+    let userContent: any[];
 
     if (image) {
-      // Image-based parsing using Gemini Vision
-      requestBody = {
-        contents: [{
-          parts: [
-            { text: systemPrompt },
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: image.replace(/^data:image\/\w+;base64,/, "")
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048
+      // Image-based parsing using vision
+      const imageData = image.replace(/^data:image\/\w+;base64,/, "");
+      userContent = [
+        { type: "text", text: systemPrompt + "\n\nExtract items from this image:" },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mimeType};base64,${imageData}`
+          }
         }
-      };
+      ];
     } else {
       // Text-based parsing
-      requestBody = {
-        contents: [{
-          parts: [
-            { text: systemPrompt + "\n\nDocument content:\n" + text }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048
-        }
-      };
+      userContent = [
+        { type: "text", text: systemPrompt + "\n\nDocument content:\n" + text }
+      ];
     }
 
-    console.log("Calling Gemini for BOM parsing...");
+    console.log("Calling AI Gateway for BOM parsing...");
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      }
-    );
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "user", content: userContent }],
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      console.error("AI Gateway error:", response.status, errorText);
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Rate limit exceeded. Please try again.", items: [] }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`AI Gateway error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Gemini BOM response:", JSON.stringify(data, null, 2));
+    console.log("AI BOM response:", JSON.stringify(data, null, 2));
 
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const textContent = data.choices?.[0]?.message?.content;
     
     if (!textContent) {
-      throw new Error("No response from Gemini");
+      throw new Error("No response from AI");
     }
 
     // Extract JSON from response
@@ -129,7 +118,6 @@ EXAMPLES:
       }
     } catch (parseError) {
       console.error("JSON parse error:", parseError, "Raw:", textContent);
-      // Return empty items if parsing fails
       parsedItems = { items: [] };
     }
 

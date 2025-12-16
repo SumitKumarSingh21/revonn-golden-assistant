@@ -6,65 +6,71 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-// Tool definitions for Gemini function calling
+// Tool definitions for function calling
 const tools = [
   {
-    name: "addToInventory",
-    description: "Add stock quantity to an existing inventory item or create a new item. Use when user says things like 'add 50 keyboards to inventory', 'stock mein 100 jeans add karo', or 'Add 100 Red Pens'",
-    parameters: {
-      type: "object",
-      properties: {
-        product_name: {
-          type: "string",
-          description: "Name of the product to add stock to"
+    type: "function",
+    function: {
+      name: "addToInventory",
+      description: "Add stock quantity to an existing inventory item or create a new item. Use when user says things like 'add 50 keyboards to inventory', 'stock mein 100 jeans add karo', or 'Add 100 Red Pens'",
+      parameters: {
+        type: "object",
+        properties: {
+          product_name: {
+            type: "string",
+            description: "Name of the product to add stock to"
+          },
+          quantity: {
+            type: "integer",
+            description: "Quantity to add to the inventory"
+          },
+          price: {
+            type: "number",
+            description: "Price per unit (optional, for new items)"
+          }
         },
-        quantity: {
-          type: "integer",
-          description: "Quantity to add to the inventory"
-        },
-        price: {
-          type: "number",
-          description: "Price per unit (optional, for new items)"
-        }
-      },
-      required: ["product_name", "quantity"]
+        required: ["product_name", "quantity"]
+      }
     }
   },
   {
-    name: "generateInvoice",
-    description: "Create an invoice/bill for a customer with items. Use when user says things like 'create bill for Ramesh 2 blue kurti', 'bill banao customer Amit ke liye', or 'Make a bill for John for 5 apples'",
-    parameters: {
-      type: "object",
-      properties: {
-        customer_name: {
-          type: "string",
-          description: "Name of the customer"
-        },
-        items: {
-          type: "array",
-          description: "List of items to bill",
+    type: "function",
+    function: {
+      name: "generateInvoice",
+      description: "Create an invoice/bill for a customer with items. Use when user says things like 'create bill for Ramesh 2 blue kurti', 'bill banao customer Amit ke liye', or 'Make a bill for John for 5 apples'",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_name: {
+            type: "string",
+            description: "Name of the customer"
+          },
           items: {
-            type: "object",
-            properties: {
-              product_name: { type: "string" },
-              quantity: { type: "integer" }
-            },
-            required: ["product_name", "quantity"]
+            type: "array",
+            description: "List of items to bill",
+            items: {
+              type: "object",
+              properties: {
+                product_name: { type: "string" },
+                quantity: { type: "integer" }
+              },
+              required: ["product_name", "quantity"]
+            }
+          },
+          payment_mode: {
+            type: "string",
+            enum: ["cash", "card", "online", "due"],
+            description: "Payment method"
+          },
+          amount_paid: {
+            type: "number",
+            description: "Amount paid by customer (0 if due)"
           }
         },
-        payment_mode: {
-          type: "string",
-          enum: ["cash", "card", "online", "due"],
-          description: "Payment method"
-        },
-        amount_paid: {
-          type: "number",
-          description: "Amount paid by customer (0 if due)"
-        }
-      },
-      required: ["customer_name", "items"]
+        required: ["customer_name", "items"]
+      }
     }
   }
 ];
@@ -77,8 +83,8 @@ serve(async (req) => {
   try {
     const { messages, userId } = await req.json();
 
-    if (!geminiApiKey) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -107,57 +113,47 @@ RULES:
 
 Current Time: ${new Date().toISOString()}`;
 
-    // Format messages for Gemini
-    const geminiMessages = messages.map((msg: any) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }]
-    }));
-
-    // Call Gemini API with function calling
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            { role: "user", parts: [{ text: systemPrompt }] },
-            { role: "model", parts: [{ text: "I understand. I am Revonn AI, ready to help with inventory and billing." }] },
-            ...geminiMessages
-          ],
-          tools: [{
-            functionDeclarations: tools
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024
-          }
-        })
-      }
-    );
+    // Call Lovable AI Gateway with function calling
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        tools: tools,
+        tool_choice: "auto",
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      console.error("AI Gateway error:", response.status, errorText);
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`AI Gateway error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Gemini response:", JSON.stringify(data, null, 2));
+    console.log("AI response:", JSON.stringify(data, null, 2));
 
-    const candidate = data.candidates?.[0];
-    if (!candidate) {
-      throw new Error("No response from Gemini");
+    const assistantMessage = data.choices?.[0]?.message;
+    if (!assistantMessage) {
+      throw new Error("No response from AI");
     }
 
-    const content = candidate.content;
-    const parts = content?.parts || [];
+    // Check if tool was called
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      const toolCall = assistantMessage.tool_calls[0];
+      const functionName = toolCall.function.name;
+      const args = JSON.parse(toolCall.function.arguments);
 
-    // Check for function call
-    const functionCall = parts.find((p: any) => p.functionCall);
-
-    if (functionCall) {
-      const { name: functionName, args } = functionCall.functionCall;
       console.log(`Function called: ${functionName}`, args);
 
       let toolResult: any;
@@ -193,16 +189,14 @@ Current Time: ${new Date().toISOString()}`;
           }
         } else {
           // Create new product
-          const { data: newProduct, error } = await supabase
+          const { error } = await supabase
             .from("inventory")
             .insert({
               user_id: userId,
               name: args.product_name,
               quantity: args.quantity,
               price: args.price || 0
-            })
-            .select()
-            .single();
+            });
 
           if (error) {
             toolResult = { success: false, error: error.message };
@@ -235,37 +229,29 @@ Current Time: ${new Date().toISOString()}`;
       }
 
       // Get final response with tool result
-      const finalResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              { role: "user", parts: [{ text: systemPrompt }] },
-              { role: "model", parts: [{ text: "I understand." }] },
-              ...geminiMessages,
-              { role: "model", parts: [functionCall] },
-              {
-                role: "user",
-                parts: [{
-                  functionResponse: {
-                    name: functionName,
-                    response: toolResult
-                  }
-                }]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 512
-            }
-          })
-        }
-      );
+      const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages,
+            assistantMessage,
+            {
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(toolResult),
+            },
+          ],
+        }),
+      });
 
       const finalData = await finalResponse.json();
-      const finalMessage = finalData.candidates?.[0]?.content?.parts?.[0]?.text || 
+      const finalMessage = finalData.choices?.[0]?.message?.content || 
         (toolResult.success 
           ? `Done! ${functionName === "addToInventory" ? `Added ${args.quantity} ${args.product_name}` : `Bill created for ${args.customer_name}`}`
           : `Error: ${toolResult.error}`);
@@ -281,11 +267,9 @@ Current Time: ${new Date().toISOString()}`;
     }
 
     // No function called - return text response
-    const textResponse = parts.find((p: any) => p.text)?.text || "I'm here to help with inventory and billing.";
-
     return new Response(
       JSON.stringify({
-        message: textResponse,
+        message: assistantMessage.content || "I'm here to help with inventory and billing.",
         action: null,
         result: null,
       }),
