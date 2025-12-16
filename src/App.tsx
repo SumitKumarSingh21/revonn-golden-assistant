@@ -6,10 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 import Splash from "./pages/Splash";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
+import InventoryDetail from "./pages/InventoryDetail";
 import BOMUpload from "./pages/BOMUpload";
 import Customers from "./pages/Customers";
 import CustomerAdd from "./pages/CustomerAdd";
@@ -89,6 +91,7 @@ function AppContent() {
       <Route path="/auth" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Auth />} />
       <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/auth" replace />} />
       <Route path="/inventory" element={isAuthenticated ? <Inventory /> : <Navigate to="/auth" replace />} />
+      <Route path="/inventory/:id" element={isAuthenticated ? <InventoryDetail /> : <Navigate to="/auth" replace />} />
       <Route path="/inventory/upload" element={isAuthenticated ? <BOMUpload /> : <Navigate to="/auth" replace />} />
       <Route path="/inventory/add" element={isAuthenticated ? <BOMUpload /> : <Navigate to="/auth" replace />} />
       <Route path="/customers" element={isAuthenticated ? <Customers /> : <Navigate to="/auth" replace />} />
@@ -116,13 +119,15 @@ function AppContent() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <SubscriptionProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </SubscriptionProvider>
+      <LanguageProvider>
+        <SubscriptionProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </SubscriptionProvider>
+      </LanguageProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

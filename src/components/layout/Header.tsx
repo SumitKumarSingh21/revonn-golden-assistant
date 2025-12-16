@@ -1,12 +1,16 @@
-import { Bell, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import revonnLogo from '@/assets/revonn-logo.jpeg';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   title?: string;
 }
 
 export function Header({ title }: HeaderProps) {
+  const { language, setLanguage, t } = useLanguage();
+
   return (
     <header className="sticky top-0 z-40">
       <div className="mx-4 mt-3 bg-card/95 backdrop-blur-md rounded-2xl border border-border shadow-sm">
@@ -21,15 +25,36 @@ export function Header({ title }: HeaderProps) {
               <h1 className="text-lg font-bold text-foreground">
                 {title || 'Revonn'}
               </h1>
-              <p className="text-xs text-muted-foreground">AI Business OS</p>
+              <p className="text-xs text-muted-foreground">{t('ai_business_os')}</p>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
-            <button className="p-2.5 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors relative">
-              <Bell className="w-5 h-5 text-muted-foreground" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
-            </button>
+            {/* Language Toggle */}
+            <div className="flex items-center bg-secondary rounded-xl p-1">
+              <button
+                onClick={() => setLanguage('en')}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
+                  language === 'en' 
+                    ? 'bg-primary text-primary-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => setLanguage('hi')}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
+                  language === 'hi' 
+                    ? 'bg-primary text-primary-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                हिं
+              </button>
+            </div>
             <Link 
               to="/settings"
               className="p-2.5 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors"
