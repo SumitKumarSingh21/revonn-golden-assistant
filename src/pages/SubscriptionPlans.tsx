@@ -4,6 +4,7 @@ import { X, Check, Sparkles, Crown, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface SubscriptionPlansProps {
   trigger?: string;
@@ -14,68 +15,78 @@ const plans = [
   {
     id: 'basic',
     name: 'Revonn Basic',
+    nameHi: 'रेवॉन बेसिक',
     icon: Zap,
     monthlyPrice: 219,
     yearlyPrice: 2199,
     popular: false,
-    features: [
-      { name: 'Unlimited billing (Non-GST)', included: true },
-      { name: 'Unlimited inventory items', included: true },
-      { name: 'Unlimited customers', included: true },
-      { name: 'Daily sales & expense tracking', included: true },
-      { name: 'Basic reports & analytics', included: true },
-      { name: 'PDF invoices', included: true },
-      { name: 'Manual WhatsApp sharing', included: true },
-      { name: 'GST invoices & compliance', included: false },
-      { name: 'Staff management', included: false },
-      { name: 'Advanced analytics', included: false },
+    highlights: [
+      { en: 'Unlimited billing (Non-GST)', hi: 'असीमित बिलिंग (नॉन-जीएसटी)' },
+      { en: 'Unlimited inventory items', hi: 'असीमित इन्वेंट्री आइटम' },
+      { en: 'Unlimited customers', hi: 'असीमित ग्राहक' },
+      { en: 'Daily sales & expense tracking', hi: 'दैनिक बिक्री और खर्च ट्रैकिंग' },
+      { en: 'PDF invoices & sharing', hi: 'पीडीएफ इनवॉयस और शेयरिंग' },
+      { en: 'Basic reports & analytics', hi: 'बेसिक रिपोर्ट और एनालिटिक्स' },
+    ],
+    notIncluded: [
+      { en: 'GST invoices', hi: 'जीएसटी इनवॉयस' },
+      { en: 'Staff management', hi: 'स्टाफ प्रबंधन' },
+      { en: 'Multi-user access', hi: 'मल्टी-यूज़र एक्सेस' },
     ]
   },
   {
     id: 'pro',
     name: 'Revonn Pro',
+    nameHi: 'रेवॉन प्रो',
     icon: Crown,
     monthlyPrice: 349,
     yearlyPrice: 3499,
     popular: true,
-    features: [
-      { name: 'Everything in Basic', included: true },
-      { name: 'GST invoices (CGST/SGST/IGST)', included: true },
-      { name: 'HSN/SAC code support', included: true },
-      { name: 'Staff management & attendance', included: true },
-      { name: 'Role-based access control', included: true },
-      { name: 'Advanced reports & analytics', included: true },
-      { name: 'Monthly/category-wise reports', included: true },
-      { name: 'Multi-user login', included: true },
-      { name: 'Priority support', included: true },
-    ]
+    highlights: [
+      { en: 'Everything in Basic', hi: 'बेसिक की सभी सुविधाएं' },
+      { en: 'GST invoices (CGST/SGST/IGST)', hi: 'जीएसटी इनवॉयस (CGST/SGST/IGST)' },
+      { en: 'HSN/SAC code support', hi: 'HSN/SAC कोड सपोर्ट' },
+      { en: 'Staff management & attendance', hi: 'स्टाफ प्रबंधन और उपस्थिति' },
+      { en: 'Role-based access control', hi: 'रोल-आधारित एक्सेस कंट्रोल' },
+      { en: 'Advanced reports & analytics', hi: 'एडवांस्ड रिपोर्ट और एनालिटिक्स' },
+      { en: 'Multi-user login', hi: 'मल्टी-यूज़र लॉगिन' },
+      { en: 'Priority support', hi: 'प्राथमिकता सहायता' },
+    ],
+    notIncluded: []
   }
 ];
 
 const aiAddon = {
   name: 'AI Add-on',
+  nameHi: 'AI ऐड-ऑन',
   icon: Sparkles,
   price: 99,
   features: [
-    'Voice & text billing commands',
-    'Smart inventory insights',
-    'Low-stock predictions',
-    'Daily profit analysis',
-    'Hindi & English support',
-    'Festival marketing content',
+    { en: 'Voice & text billing commands', hi: 'वॉयस और टेक्स्ट बिलिंग कमांड' },
+    { en: 'Smart inventory insights', hi: 'स्मार्ट इन्वेंट्री इनसाइट्स' },
+    { en: 'Low-stock predictions', hi: 'कम स्टॉक भविष्यवाणी' },
+    { en: 'Daily profit analysis', hi: 'दैनिक लाभ विश्लेषण' },
+    { en: 'Marketing content generation', hi: 'मार्केटिंग कंटेंट जेनरेशन' },
+    { en: 'Hindi & English support', hi: 'हिंदी और अंग्रेजी सपोर्ट' },
   ]
 };
 
 export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, onClose }) => {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [billingCycle, setBillingCycle] = React.useState<'monthly' | 'yearly'>('monthly');
-  const [selectedPlan, setSelectedPlan] = React.useState<string | null>(null);
-  const [includeAI, setIncludeAI] = React.useState(false);
+
+  const triggerMessages: { [key: string]: { en: string; hi: string } } = {
+    bills: { en: "You've reached the demo limit of 5 bills.", hi: "आपने 5 बिल की डेमो सीमा पूरी कर ली है।" },
+    inventory: { en: "You've reached the demo limit of 10 inventory items.", hi: "आपने 10 इन्वेंट्री आइटम की डेमो सीमा पूरी कर ली है।" },
+    customers: { en: "You've reached the demo limit of 10 customers.", hi: "आपने 10 ग्राहक की डेमो सीमा पूरी कर ली है।" },
+    gst: { en: "GST features require a Pro subscription.", hi: "जीएसटी फीचर्स के लिए प्रो सब्सक्रिप्शन चाहिए।" },
+    staff: { en: "Staff management requires a Pro subscription.", hi: "स्टाफ प्रबंधन के लिए प्रो सब्सक्रिप्शन चाहिए।" },
+    reports: { en: "Advanced reports require a paid subscription.", hi: "एडवांस्ड रिपोर्ट के लिए पेड सब्सक्रिप्शन चाहिए।" },
+  };
 
   const handleSubscribe = (planId: string) => {
-    // For now, show coming soon message
-    // In production, this would integrate with payment gateway
-    alert(`Subscription to ${planId} plan will be available soon. Contact support for early access.`);
+    navigate('/settings/pricing');
   };
 
   return (
@@ -84,17 +95,12 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Choose Your Plan</h1>
-            {trigger && (
+            <h1 className="text-2xl font-bold text-foreground">
+              {language === 'hi' ? 'अपना प्लान चुनें' : 'Choose Your Plan'}
+            </h1>
+            {trigger && triggerMessages[trigger] && (
               <p className="text-muted-foreground text-sm mt-1">
-                {trigger === 'bills' && "You've reached the demo limit of 5 bills."}
-                {trigger === 'inventory' && "You've reached the demo limit of 10 inventory items."}
-                {trigger === 'customers' && "You've reached the demo limit of 10 customers."}
-                {trigger === 'gst' && "GST features require a Pro subscription."}
-                {trigger === 'staff' && "Staff management requires a Pro subscription."}
-                {trigger === 'reports' && "Advanced reports require a paid subscription."}
-                {!['bills', 'inventory', 'customers', 'gst', 'staff', 'reports'].includes(trigger) && 
-                  "Subscribe to unlock all features."}
+                {language === 'hi' ? triggerMessages[trigger].hi : triggerMessages[trigger].en}
               </p>
             )}
           </div>
@@ -115,7 +121,7 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
                 : 'bg-muted text-muted-foreground'
             }`}
           >
-            Monthly
+            {language === 'hi' ? 'मासिक' : 'Monthly'}
           </button>
           <button
             onClick={() => setBillingCycle('yearly')}
@@ -125,8 +131,10 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
                 : 'bg-muted text-muted-foreground'
             }`}
           >
-            Yearly
-            <Badge variant="secondary" className="ml-2 text-xs">Save 15%</Badge>
+            {language === 'hi' ? 'वार्षिक' : 'Yearly'}
+            <Badge variant="secondary" className="ml-2 text-xs bg-success/20 text-success">
+              {language === 'hi' ? '15% बचाएं' : 'Save 15%'}
+            </Badge>
           </button>
         </div>
 
@@ -145,7 +153,7 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
               >
                 {plan.popular && (
                   <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
-                    Most Popular
+                    {language === 'hi' ? 'सबसे लोकप्रिय' : 'Most Popular'}
                   </Badge>
                 )}
                 
@@ -153,26 +161,30 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
                   <div className={`p-2 rounded-lg ${plan.popular ? 'bg-primary/10' : 'bg-muted'}`}>
                     <Icon className={`h-6 w-6 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
                   </div>
-                  <h2 className="text-xl font-bold">{plan.name}</h2>
+                  <h2 className="text-xl font-bold">{language === 'hi' ? plan.nameHi : plan.name}</h2>
                 </div>
 
                 <div className="mb-6">
                   <span className="text-3xl font-bold">₹{price}</span>
                   <span className="text-muted-foreground">
-                    /{billingCycle === 'monthly' ? 'month' : 'year'}
+                    /{billingCycle === 'monthly' ? (language === 'hi' ? 'महीना' : 'month') : (language === 'hi' ? 'वर्ष' : 'year')}
                   </span>
                 </div>
 
                 <ul className="space-y-3 mb-6">
-                  {plan.features.map((feature, idx) => (
+                  {plan.highlights.map((feature, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      {feature.included ? (
-                        <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                      ) : (
-                        <X className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                      )}
-                      <span className={feature.included ? 'text-foreground' : 'text-muted-foreground'}>
-                        {feature.name}
+                      <Check className="h-5 w-5 text-success shrink-0 mt-0.5" />
+                      <span className="text-foreground text-sm">
+                        {language === 'hi' ? feature.hi : feature.en}
+                      </span>
+                    </li>
+                  ))}
+                  {plan.notIncluded.map((feature, idx) => (
+                    <li key={`not-${idx}`} className="flex items-start gap-2">
+                      <X className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground text-sm">
+                        {language === 'hi' ? feature.hi : feature.en}
                       </span>
                     </li>
                   ))}
@@ -183,7 +195,7 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
                   variant={plan.popular ? 'default' : 'outline'}
                   onClick={() => handleSubscribe(plan.id)}
                 >
-                  Subscribe to {plan.name}
+                  {language === 'hi' ? `${plan.nameHi} चुनें` : `Subscribe to ${plan.name}`}
                 </Button>
               </Card>
             );
@@ -198,15 +210,15 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
                 <Sparkles className="h-6 w-6 text-violet-500" />
               </div>
               <div>
-                <h3 className="text-lg font-bold">{aiAddon.name}</h3>
+                <h3 className="text-lg font-bold">{language === 'hi' ? aiAddon.nameHi : aiAddon.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Add AI intelligence to any plan
+                  {language === 'hi' ? 'किसी भी प्लान में AI जोड़ें' : 'Add AI intelligence to any plan'}
                 </p>
               </div>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold">+₹{aiAddon.price}</span>
-              <span className="text-muted-foreground">/month</span>
+              <span className="text-muted-foreground">/{language === 'hi' ? 'महीना' : 'month'}</span>
             </div>
           </div>
           
@@ -214,7 +226,7 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
             {aiAddon.features.map((feature, idx) => (
               <div key={idx} className="flex items-center gap-2 text-sm">
                 <Sparkles className="h-4 w-4 text-violet-500" />
-                <span>{feature}</span>
+                <span>{language === 'hi' ? feature.hi : feature.en}</span>
               </div>
             ))}
           </div>
@@ -222,8 +234,16 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ trigger, o
 
         {/* Demo Info */}
         <div className="mt-8 text-center text-sm text-muted-foreground">
-          <p>Demo mode includes: 5 bills, 10 inventory items, 10 customers</p>
-          <p>All demo data will be preserved after subscription.</p>
+          <p>
+            {language === 'hi' 
+              ? 'डेमो मोड में शामिल: 5 बिल, 10 इन्वेंट्री आइटम, 10 ग्राहक' 
+              : 'Demo mode includes: 5 bills, 10 inventory items, 10 customers'}
+          </p>
+          <p>
+            {language === 'hi' 
+              ? 'सब्सक्रिप्शन के बाद सभी डेमो डेटा सुरक्षित रहेगा।' 
+              : 'All demo data will be preserved after subscription.'}
+          </p>
         </div>
       </div>
     </div>

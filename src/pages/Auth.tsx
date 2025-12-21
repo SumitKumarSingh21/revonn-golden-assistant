@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Phone, Store, FileText, Eye, EyeOff, Loader2, User, Briefcase } from 'lucide-react';
@@ -285,11 +285,24 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="py-4 text-center">
+      {/* Footer with Policy Links */}
+      <div className="py-4 text-center space-y-2">
         <p className="text-xs text-muted-foreground">
-          By continuing, you agree to our Terms of Service
+          By continuing, you agree to our
         </p>
+        <div className="flex items-center justify-center gap-2 flex-wrap text-xs">
+          <Link to="/policies/terms" className="text-primary hover:underline">
+            Terms & Conditions
+          </Link>
+          <span className="text-muted-foreground">•</span>
+          <Link to="/policies/privacy" className="text-primary hover:underline">
+            Privacy Policy
+          </Link>
+          <span className="text-muted-foreground">•</span>
+          <Link to="/policies/refund" className="text-primary hover:underline">
+            Refund Policy
+          </Link>
+        </div>
       </div>
     </div>
   );

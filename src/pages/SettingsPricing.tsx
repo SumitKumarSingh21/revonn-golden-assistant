@@ -17,17 +17,64 @@ const plans = [
     monthlyPrice: 219,
     yearlyPrice: 2199,
     popular: false,
-    features: [
-      { name: 'Unlimited billing (Non-GST)', nameHi: 'असीमित बिलिंग (नॉन-जीएसटी)', included: true },
-      { name: 'Unlimited inventory items', nameHi: 'असीमित इन्वेंट्री आइटम', included: true },
-      { name: 'Unlimited customers', nameHi: 'असीमित ग्राहक', included: true },
-      { name: 'Daily sales & expense tracking', nameHi: 'दैनिक बिक्री और खर्च ट्रैकिंग', included: true },
-      { name: 'Basic reports & analytics', nameHi: 'बेसिक रिपोर्ट और एनालिटिक्स', included: true },
-      { name: 'PDF invoices', nameHi: 'पीडीएफ इनवॉयस', included: true },
-      { name: 'Manual WhatsApp sharing', nameHi: 'मैन्युअल व्हाट्सएप शेयरिंग', included: true },
-      { name: 'GST invoices & compliance', nameHi: 'जीएसटी इनवॉयस और अनुपालन', included: false },
-      { name: 'Staff management', nameHi: 'स्टाफ प्रबंधन', included: false },
-      { name: 'Advanced analytics', nameHi: 'एडवांस्ड एनालिटिक्स', included: false },
+    sections: [
+      {
+        title: { en: '🧾 Billing (Non-GST)', hi: '🧾 बिलिंग (नॉन-जीएसटी)' },
+        features: [
+          { en: 'Unlimited bill creation', hi: 'असीमित बिल बनाएं', included: true },
+          { en: 'Item billing with size & color', hi: 'साइज और रंग के साथ आइटम बिलिंग', included: true },
+          { en: 'Discounts', hi: 'छूट', included: true },
+          { en: 'Bill history', hi: 'बिल इतिहास', included: true },
+          { en: 'PDF invoices', hi: 'पीडीएफ इनवॉयस', included: true },
+          { en: 'Manual WhatsApp sharing', hi: 'मैन्युअल व्हाट्सएप शेयरिंग', included: true },
+        ]
+      },
+      {
+        title: { en: '📦 Inventory', hi: '📦 इन्वेंट्री' },
+        features: [
+          { en: 'Unlimited items', hi: 'असीमित आइटम', included: true },
+          { en: 'Auto stock deduction', hi: 'ऑटो स्टॉक कटौती', included: true },
+          { en: 'Purchase entries (BOM)', hi: 'खरीद एंट्री (BOM)', included: true },
+          { en: 'Vendor list', hi: 'वेंडर लिस्ट', included: true },
+          { en: 'Stock adjustments', hi: 'स्टॉक एडजस्टमेंट', included: true },
+          { en: 'Sold-out visibility', hi: 'सोल्ड-आउट दृश्यता', included: true },
+        ]
+      },
+      {
+        title: { en: '👥 Customers', hi: '👥 ग्राहक' },
+        features: [
+          { en: 'Unlimited customers', hi: 'असीमित ग्राहक', included: true },
+          { en: 'Purchase history', hi: 'खरीद इतिहास', included: true },
+          { en: 'Manual outstanding tracking', hi: 'मैन्युअल बकाया ट्रैकिंग', included: true },
+        ]
+      },
+      {
+        title: { en: '💰 Finance', hi: '💰 वित्त' },
+        features: [
+          { en: 'Daily sales', hi: 'दैनिक बिक्री', included: true },
+          { en: 'Expense tracking', hi: 'खर्च ट्रैकिंग', included: true },
+          { en: 'Cash-in / cash-out', hi: 'कैश-इन / कैश-आउट', included: true },
+          { en: 'Day-end summary', hi: 'दिन-अंत सारांश', included: true },
+          { en: 'Basic profit view', hi: 'बेसिक लाभ दृश्य', included: true },
+        ]
+      },
+      {
+        title: { en: '📊 Reports', hi: '📊 रिपोर्ट' },
+        features: [
+          { en: 'Daily reports', hi: 'दैनिक रिपोर्ट', included: true },
+          { en: 'Item-wise sales', hi: 'आइटम-वार बिक्री', included: true },
+          { en: 'Basic analytics', hi: 'बेसिक एनालिटिक्स', included: true },
+        ]
+      },
+      {
+        title: { en: '🚫 Not Included', hi: '🚫 शामिल नहीं' },
+        features: [
+          { en: 'GST invoices', hi: 'जीएसटी इनवॉयस', included: false },
+          { en: 'Staff management', hi: 'स्टाफ प्रबंधन', included: false },
+          { en: 'Multi-user access', hi: 'मल्टी-यूज़र एक्सेस', included: false },
+          { en: 'Advanced analytics', hi: 'एडवांस्ड एनालिटिक्स', included: false },
+        ]
+      }
     ]
   },
   {
@@ -38,16 +85,47 @@ const plans = [
     monthlyPrice: 349,
     yearlyPrice: 3499,
     popular: true,
-    features: [
-      { name: 'Everything in Basic', nameHi: 'बेसिक की सभी सुविधाएं', included: true },
-      { name: 'GST invoices (CGST/SGST/IGST)', nameHi: 'जीएसटी इनवॉयस (CGST/SGST/IGST)', included: true },
-      { name: 'HSN/SAC code support', nameHi: 'HSN/SAC कोड सपोर्ट', included: true },
-      { name: 'Staff management & attendance', nameHi: 'स्टाफ प्रबंधन और उपस्थिति', included: true },
-      { name: 'Role-based access control', nameHi: 'रोल-आधारित एक्सेस कंट्रोल', included: true },
-      { name: 'Advanced reports & analytics', nameHi: 'एडवांस्ड रिपोर्ट और एनालिटिक्स', included: true },
-      { name: 'Monthly/category-wise reports', nameHi: 'मासिक/श्रेणी-वार रिपोर्ट', included: true },
-      { name: 'Multi-user login', nameHi: 'मल्टी-यूज़र लॉगिन', included: true },
-      { name: 'Priority support', nameHi: 'प्राथमिकता सहायता', included: true },
+    sections: [
+      {
+        title: { en: '✅ Everything in Basic, plus:', hi: '✅ बेसिक में सब कुछ, प्लस:' },
+        features: []
+      },
+      {
+        title: { en: '🧮 GST & Compliance', hi: '🧮 जीएसटी और अनुपालन' },
+        features: [
+          { en: 'GST invoices', hi: 'जीएसटी इनवॉयस', included: true },
+          { en: 'CGST/SGST/IGST', hi: 'CGST/SGST/IGST', included: true },
+          { en: 'HSN/SAC support', hi: 'HSN/SAC सपोर्ट', included: true },
+          { en: 'GST summary reports', hi: 'जीएसटी सारांश रिपोर्ट', included: true },
+          { en: 'Export for CA', hi: 'CA के लिए एक्सपोर्ट', included: true },
+        ]
+      },
+      {
+        title: { en: '👨‍💼 Staff Management', hi: '👨‍💼 स्टाफ प्रबंधन' },
+        features: [
+          { en: 'Add staff', hi: 'स्टाफ जोड़ें', included: true },
+          { en: 'Attendance', hi: 'उपस्थिति', included: true },
+          { en: 'Salary calculation', hi: 'वेतन गणना', included: true },
+          { en: 'Role-based access', hi: 'रोल-आधारित एक्सेस', included: true },
+          { en: 'Staff activity tracking', hi: 'स्टाफ गतिविधि ट्रैकिंग', included: true },
+        ]
+      },
+      {
+        title: { en: '📊 Advanced Reports', hi: '📊 एडवांस्ड रिपोर्ट' },
+        features: [
+          { en: 'Monthly sales', hi: 'मासिक बिक्री', included: true },
+          { en: 'Category-wise reports', hi: 'श्रेणी-वार रिपोर्ट', included: true },
+          { en: 'Best/low-performing items', hi: 'सर्वश्रेष्ठ/कम प्रदर्शन वाले आइटम', included: true },
+          { en: 'Business analytics dashboard', hi: 'बिज़नेस एनालिटिक्स डैशबोर्ड', included: true },
+        ]
+      },
+      {
+        title: { en: '👥 Multi-user', hi: '👥 मल्टी-यूज़र' },
+        features: [
+          { en: 'Owner + staff login', hi: 'मालिक + स्टाफ लॉगिन', included: true },
+          { en: 'Permission control', hi: 'परमिशन कंट्रोल', included: true },
+        ]
+      }
     ]
   }
 ];
@@ -57,13 +135,63 @@ const aiAddon = {
   nameHi: 'AI ऐड-ऑन',
   icon: Sparkles,
   price: 99,
-  features: [
-    { en: 'Voice & text billing commands', hi: 'वॉयस और टेक्स्ट बिलिंग कमांड' },
-    { en: 'Smart inventory insights', hi: 'स्मार्ट इन्वेंट्री इनसाइट्स' },
-    { en: 'Low-stock predictions', hi: 'कम स्टॉक भविष्यवाणी' },
-    { en: 'Daily profit analysis', hi: 'दैनिक लाभ विश्लेषण' },
-    { en: 'Hindi & English support', hi: 'हिंदी और अंग्रेजी सपोर्ट' },
-    { en: 'Festival marketing content', hi: 'त्योहार मार्केटिंग कंटेंट' },
+  sections: [
+    {
+      title: { en: '🧾 Billing', hi: '🧾 बिलिंग' },
+      features: [
+        { en: 'Create bills using text or voice', hi: 'टेक्स्ट या वॉयस से बिल बनाएं' },
+        { en: 'Auto-fill items, quantity, size, color', hi: 'आइटम, मात्रा, साइज, रंग ऑटो-फिल' },
+        { en: 'Auto-fill customer details', hi: 'ग्राहक विवरण ऑटो-फिल' },
+      ]
+    },
+    {
+      title: { en: '📦 Inventory', hi: '📦 इन्वेंट्री' },
+      features: [
+        { en: 'Low-stock prediction', hi: 'कम स्टॉक भविष्यवाणी' },
+        { en: 'Fast-moving items insights', hi: 'तेज़ बिकने वाले आइटम इनसाइट्स' },
+        { en: 'Slow/dead stock insights', hi: 'धीमे/डेड स्टॉक इनसाइट्स' },
+        { en: 'Reorder suggestions', hi: 'रीऑर्डर सुझाव' },
+      ]
+    },
+    {
+      title: { en: '💰 Finance', hi: '💰 वित्त' },
+      features: [
+        { en: 'Daily profit insights', hi: 'दैनिक लाभ इनसाइट्स' },
+        { en: 'Expense pattern analysis', hi: 'खर्च पैटर्न विश्लेषण' },
+        { en: 'Sales explanations', hi: 'बिक्री व्याख्या' },
+      ]
+    },
+    {
+      title: { en: '📊 Reports & Insights', hi: '📊 रिपोर्ट और इनसाइट्स' },
+      features: [
+        { en: 'Daily insights', hi: 'दैनिक इनसाइट्स' },
+        { en: 'Weekly summaries', hi: 'साप्ताहिक सारांश' },
+        { en: 'Trend explanations', hi: 'ट्रेंड व्याख्या' },
+      ]
+    },
+    {
+      title: { en: '🧮 GST', hi: '🧮 जीएसटी' },
+      features: [
+        { en: 'GST rate suggestions', hi: 'जीएसटी दर सुझाव' },
+        { en: 'Basic GST mistake detection', hi: 'बेसिक जीएसटी गलती पहचान' },
+      ]
+    },
+    {
+      title: { en: '💬 Marketing', hi: '💬 मार्केटिंग' },
+      features: [
+        { en: 'Generate offer messages', hi: 'ऑफर मैसेज जेनरेट करें' },
+        { en: 'Festival promotions', hi: 'त्योहार प्रमोशन' },
+        { en: 'Business-friendly copy', hi: 'बिज़नेस-फ्रेंडली कॉपी' },
+      ]
+    },
+    {
+      title: { en: '🗣️ AI Assistant', hi: '🗣️ AI सहायक' },
+      features: [
+        { en: 'Answer business questions', hi: 'बिज़नेस सवालों का जवाब' },
+        { en: 'Use real business data', hi: 'असली बिज़नेस डेटा उपयोग' },
+        { en: 'Hindi & English support', hi: 'हिंदी और अंग्रेजी सपोर्ट' },
+      ]
+    }
   ]
 };
 
@@ -73,6 +201,7 @@ export default function SettingsPricing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [includeAI, setIncludeAI] = useState(false);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlan(planId);
@@ -150,12 +279,12 @@ export default function SettingsPricing() {
             const Icon = plan.icon;
             const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
             const isSelected = selectedPlan === plan.id;
+            const isExpanded = expandedPlan === plan.id;
             
             return (
               <Card 
                 key={plan.id}
-                onClick={() => handleSelectPlan(plan.id)}
-                className={`p-4 relative cursor-pointer transition-all ${
+                className={`p-4 relative transition-all ${
                   isSelected ? 'border-primary ring-2 ring-primary/20' : ''
                 } ${plan.popular ? 'border-primary/50' : ''}`}
               >
@@ -165,42 +294,67 @@ export default function SettingsPricing() {
                   </Badge>
                 )}
                 
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${plan.popular ? 'bg-primary/10' : 'bg-muted'}`}>
-                      <Icon className={`h-5 w-5 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
-                    </div>
-                    <div>
-                      <h2 className="font-bold">{language === 'hi' ? plan.nameHi : plan.name}</h2>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-bold">₹{price}</span>
-                        <span className="text-sm text-muted-foreground">
-                          /{billingCycle === 'monthly' ? t('month') : t('year')}
-                        </span>
+                <div 
+                  onClick={() => handleSelectPlan(plan.id)}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${plan.popular ? 'bg-primary/10' : 'bg-muted'}`}>
+                        <Icon className={`h-5 w-5 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div>
+                        <h2 className="font-bold">{language === 'hi' ? plan.nameHi : plan.name}</h2>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold">₹{price}</span>
+                          <span className="text-sm text-muted-foreground">
+                            /{billingCycle === 'monthly' ? t('month') : t('year')}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                  }`}>
-                    {isSelected && <Check className="w-4 h-4 text-primary-foreground" />}
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                    }`}>
+                      {isSelected && <Check className="w-4 h-4 text-primary-foreground" />}
+                    </div>
                   </div>
                 </div>
 
-                <ul className="space-y-2">
-                  {plan.features.slice(0, 5).map((feature, idx) => (
-                    <li key={idx} className="flex items-center gap-2 text-sm">
-                      {feature.included ? (
-                        <Check className="h-4 w-4 text-success shrink-0" />
-                      ) : (
-                        <X className="h-4 w-4 text-muted-foreground shrink-0" />
-                      )}
-                      <span className={feature.included ? 'text-foreground' : 'text-muted-foreground'}>
-                        {language === 'hi' ? feature.nameHi : feature.name}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <button
+                  onClick={() => setExpandedPlan(isExpanded ? null : plan.id)}
+                  className="text-xs text-primary font-medium mb-3"
+                >
+                  {isExpanded 
+                    ? (language === 'hi' ? 'कम दिखाएं' : 'Show Less') 
+                    : (language === 'hi' ? 'सभी फीचर्स देखें' : 'View All Features')}
+                </button>
+
+                {isExpanded && (
+                  <div className="space-y-4 border-t border-border pt-4">
+                    {plan.sections.map((section, idx) => (
+                      <div key={idx}>
+                        <h4 className="text-sm font-semibold text-foreground mb-2">
+                          {language === 'hi' ? section.title.hi : section.title.en}
+                        </h4>
+                        <ul className="space-y-1.5">
+                          {section.features.map((feature, fidx) => (
+                            <li key={fidx} className="flex items-center gap-2 text-xs">
+                              {feature.included ? (
+                                <Check className="h-3.5 w-3.5 text-success shrink-0" />
+                              ) : (
+                                <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              )}
+                              <span className={feature.included ? 'text-foreground' : 'text-muted-foreground'}>
+                                {language === 'hi' ? feature.hi : feature.en}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -208,12 +362,14 @@ export default function SettingsPricing() {
 
         {/* AI Add-on */}
         <Card 
-          onClick={() => setIncludeAI(!includeAI)}
-          className={`p-4 cursor-pointer transition-all bg-gradient-to-r from-violet-500/10 to-purple-500/10 ${
+          className={`p-4 transition-all bg-gradient-to-r from-violet-500/10 to-purple-500/10 ${
             includeAI ? 'border-violet-500 ring-2 ring-violet-500/20' : 'border-violet-500/30'
           }`}
         >
-          <div className="flex items-center justify-between">
+          <div 
+            onClick={() => setIncludeAI(!includeAI)}
+            className="flex items-center justify-between cursor-pointer"
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-violet-500/20">
                 <Sparkles className="h-5 w-5 text-violet-500" />
@@ -232,11 +388,20 @@ export default function SettingsPricing() {
             </div>
           </div>
           
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {aiAddon.features.slice(0, 4).map((feature, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Sparkles className="h-3 w-3 text-violet-500" />
-                <span>{language === 'hi' ? feature.hi : feature.en}</span>
+          <div className="mt-4 space-y-3">
+            {aiAddon.sections.map((section, idx) => (
+              <div key={idx}>
+                <h4 className="text-xs font-semibold text-violet-600 mb-1">
+                  {language === 'hi' ? section.title.hi : section.title.en}
+                </h4>
+                <div className="grid grid-cols-1 gap-1">
+                  {section.features.map((feature, fidx) => (
+                    <div key={fidx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Sparkles className="h-3 w-3 text-violet-500 shrink-0" />
+                      <span>{language === 'hi' ? feature.hi : feature.en}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
