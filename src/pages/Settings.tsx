@@ -12,18 +12,21 @@ import {
   Sparkles,
   Cloud,
   Download,
-  Upload
+  Upload,
+  Crown
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppStore } from '@/store/app-store';
 import { exportBackup, importBackup } from '@/lib/database';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Settings() {
   const navigate = useNavigate();
   const { shopSettings, setShopSettings } = useAppStore();
   const [isExporting, setIsExporting] = useState(false);
+  const { t } = useLanguage();
 
   const handleExportBackup = async () => {
     setIsExporting(true);
@@ -69,31 +72,37 @@ export default function Settings() {
 
   const sections = [
     {
-      title: 'Business',
+      title: t('business'),
       items: [
-        { icon: Store, label: 'Shop Profile', description: 'Name, GSTIN, Address', path: '/settings/shop' },
-        { icon: FileText, label: 'Invoice Settings', description: 'Prefix, templates', path: '/settings/invoice' },
+        { icon: Store, label: t('shop_profile'), description: t('name_gstin_address'), path: '/settings/shop' },
+        { icon: FileText, label: t('invoice_settings'), description: t('invoice_prefix'), path: '/settings/invoice' },
       ]
     },
     {
-      title: 'Features',
+      title: t('subscription'),
       items: [
-        { icon: Sparkles, label: 'AI Assistant', description: 'Mock AI / Real AI toggle', path: '/settings/ai' },
-        { icon: Bell, label: 'Notifications', description: 'Alerts & reminders', path: '/settings/notifications' },
+        { icon: Crown, label: t('pricing'), description: t('view_plans'), path: '/settings/pricing' },
       ]
     },
     {
-      title: 'Data',
+      title: t('features'),
       items: [
-        { icon: Database, label: 'Backup & Restore', description: 'Export/import your data', action: 'backup' },
-        { icon: Cloud, label: 'Sync Status', description: 'Pending: 0 items', path: '/settings/sync' },
+        { icon: Sparkles, label: t('ai_assistant'), description: t('ai_toggle'), path: '/settings/ai' },
+        { icon: Bell, label: t('notifications'), description: t('alerts_reminders'), path: '/settings/notifications' },
       ]
     },
     {
-      title: 'Support',
+      title: t('data'),
       items: [
-        { icon: HelpCircle, label: 'Help & FAQ', description: 'Get help using Revonn', path: '/help' },
-        { icon: Shield, label: 'Privacy & Security', description: 'Data protection', path: '/settings/privacy' },
+        { icon: Database, label: t('backup_restore'), description: t('export_import'), action: 'backup' },
+        { icon: Cloud, label: t('sync_status'), description: t('pending_items'), path: '/settings/sync' },
+      ]
+    },
+    {
+      title: t('support'),
+      items: [
+        { icon: HelpCircle, label: t('help_faq'), description: t('get_help'), path: '/help' },
+        { icon: Shield, label: t('privacy_security'), description: t('data_protection'), path: '/settings/privacy' },
       ]
     },
   ];

@@ -24,6 +24,11 @@ import SettingsInvoice from "./pages/SettingsInvoice";
 import SettingsNotifications from "./pages/SettingsNotifications";
 import SettingsSync from "./pages/SettingsSync";
 import SettingsPrivacy from "./pages/SettingsPrivacy";
+import SettingsPricing from "./pages/SettingsPricing";
+import Checkout from "./pages/Checkout";
+import PolicyTerms from "./pages/PolicyTerms";
+import PolicyRefund from "./pages/PolicyRefund";
+import PolicyPrivacy from "./pages/PolicyPrivacy";
 import Help from "./pages/Help";
 import Billing from "./pages/Billing";
 import InvoiceDetail from "./pages/InvoiceDetail";
@@ -106,6 +111,11 @@ function AppContent() {
       <Route path="/settings/notifications" element={isAuthenticated ? <SettingsNotifications /> : <Navigate to="/auth" replace />} />
       <Route path="/settings/sync" element={isAuthenticated ? <SettingsSync /> : <Navigate to="/auth" replace />} />
       <Route path="/settings/privacy" element={isAuthenticated ? <SettingsPrivacy /> : <Navigate to="/auth" replace />} />
+      <Route path="/settings/pricing" element={isAuthenticated ? <SettingsPricing /> : <Navigate to="/auth" replace />} />
+      <Route path="/checkout" element={isAuthenticated ? <Checkout /> : <Navigate to="/auth" replace />} />
+      <Route path="/policy/terms" element={<PolicyTerms />} />
+      <Route path="/policy/refund" element={<PolicyRefund />} />
+      <Route path="/policy/privacy" element={<PolicyPrivacy />} />
       <Route path="/help" element={isAuthenticated ? <Help /> : <Navigate to="/auth" replace />} />
       <Route path="/billing" element={isAuthenticated ? <Billing /> : <Navigate to="/auth" replace />} />
       <Route path="/billing/new" element={isAuthenticated ? <Billing /> : <Navigate to="/auth" replace />} />
